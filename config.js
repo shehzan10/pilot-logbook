@@ -2,7 +2,7 @@
 // The Cesium ion access token can also be supplied via ?token=... in the URL
 // or entered in the in-app prompt (it is then stored in localStorage).
 window.APP_CONFIG = {
-  ionAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IllWdVpMd3FoN1A4aWFtTUUiLCJqdGkiOiJkMzdmNjE0OS05NmIzLTQ5MjctODBmZC0yNzBmY2M3NmMxODkiLCJpZCI6NjksInN1YiI6InpzbW9oYW1tZWQiLCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoiRmxpZ2h0IEFwcCIsImlhdCI6MTc5MTkyMDc4Mn0.TRD0zc4sow05ubCqewkp8dkzjj1EhRKUA4NRGWqXgS4",
+  ionAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6Ikt2S181ZHkwOEFjSEF5TFkiLCJqdGkiOiJkMzdmNjE0OS05NmIzLTQ5MjctODBmZC0yNzBmY2M3NmMxODkiLCJpZCI6NjksInN1YiI6InpzbW9oYW1tZWQiLCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoiRmxpZ2h0IEFwcCIsImlhdCI6MTc5MTkyMTc0M30.u1G4wvT0MpW5_Z7UHoHpWtOIvzGx9auYboyMyRP7G_U",
   tailNumber: "N16237",
   // Known flight assets (KML ADS-B tracks). Assets whose names start with the
   // tail number are also auto-discovered if the token has the assets:list scope.
