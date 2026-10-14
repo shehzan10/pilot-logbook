@@ -6,7 +6,7 @@ window.APP_CONFIG = {
   tailNumber: "N16237",
   // Known flight assets (KML ADS-B tracks). Assets whose names start with the
   // tail number are also auto-discovered if the token has the assets:list scope.
-  flightAssetIds: [6026562, 6022716],
+  flightAssetIds: [6026562, 6022716, 6032961],
   // Cessna Skyhawk 172S glTF model (ion asset) flown along the selected track.
   aircraftModelAssetId: 6026603,
   // Extra yaw (degrees) if the model's nose doesn't point along the track.
