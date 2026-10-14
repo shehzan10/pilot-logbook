@@ -155,6 +155,20 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
 .spark { width: 100%; height: 34px; margin-top: 8px; display: block; }
 
+/* Lessons whose track hasn't been downloaded yet */
+.flight-card.unloaded .chip b { color: var(--muted); }
+.flight-card.unloaded .card-route { color: color-mix(in srgb, var(--c) 70%, var(--muted)); }
+.spark-placeholder {
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03), color-mix(in srgb, var(--c) 18%, transparent), rgba(255, 255, 255, 0.03));
+  background-size: 200% 100%;
+  opacity: 0.5;
+}
+.flight-card.loading .spark-placeholder { opacity: 1; animation: shimmer 1.2s linear infinite; }
+.flight-card.loading .node { animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: 0 0; } }
+@keyframes pulse { to { box-shadow: 0 0 2px var(--c); } }
+
 .notes { margin-top: 8px; }
 .notes textarea {
   width: 100%; resize: vertical; min-height: 54px;
@@ -247,7 +261,6 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 }
 .loader-plane svg { width: 34px; height: 34px; fill: #fff; transform: rotate(45deg); }
 .loader-title { font-size: 20px; font-weight: 800; }
-.loader-status { color: var(--muted); font-size: 13px; margin-top: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(3, 5, 15, 0.6); transition: opacity .3s; }

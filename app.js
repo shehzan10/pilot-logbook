@@ -40,7 +40,6 @@
     toast._t = setTimeout(() => t.classList.remove("show"), ms);
   }
 
-  function setLoader(msg) { $("#loaderStatus").textContent = msg; }
 
   function haversine(lat1, lon1, lat2, lon2) {
     const dLat = lat2 - lat1;
@@ -143,7 +142,6 @@
 
     state.viewer = viewer;
 
-    setLoader("Streaming Google Photorealistic 3D Tiles…");
     try {
       const tileset = await Cesium.createGooglePhotorealistic3DTileset({ onlyUsingWithGoogleGeocoder: true });
       tileset.maximumScreenSpaceError = 12;
@@ -171,7 +169,95 @@
     } catch (e) {
       // Token may lack assets:list scope; fall back to configured IDs.
     }
-    return [...ids.entries()].map(([id, name]) => ({ id, name }));
+    const list = [...ids.entries()].map(([id, name]) => ({ id, name }));
+    // Names carry the flight date, which orders lessons before any KML is downloaded.
+    await Promise.all(
+      list.filter((a) => !a.name && typeof a.id === "number").map(async (a) => {
+        try {
+          const res = await fetch(`https://api.cesium.com/v1/assets/${a.id}`, {
+            headers: { Authorization: `Bearer ${Cesium.Ion.defaultAccessToken}` },
+          });
+          if (res.ok) a.name = (await res.json()).name;
+        } catch (e) {
+          // Metadata is optional; the lesson still loads by ID.
+        }
+      })
+    );
+    return list;
+  }
+
+  function dateFromName(name) {
+    const m = name && name.match(/(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+
+  const fmtDate = (d) => d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+
+  // Flights are placeholders until their KML is fetched (on demand, newest first).
+  function makeFlightStubs(assets) {
+    const stubs = assets.map((a) => ({ id: a.id, name: a.name, nameDate: dateFromName(a.name), loaded: false, entities: {} }));
+    stubs.sort((a, b) => (a.nameDate && b.nameDate ? a.nameDate - b.nameDate : 0) || (a.id > b.id ? 1 : -1));
+    stubs.forEach((f, i) => {
+      f.lesson = i + 1;
+      f.color = gradientColor(stubs.length > 1 ? i / (stubs.length - 1) : 0);
+      f.css = f.color.toCssHexString();
+      f.dateLabel = f.nameDate ? fmtDate(f.nameDate) : f.name || `Asset ${f.id}`;
+    });
+    return stubs;
+  }
+
+  function ensureLoaded(f) {
+    if (f.loaded) return Promise.resolve(f);
+    if (!f.loading) {
+      f.failed = false;
+      f.loading = loadFlight(f)
+        .then((data) => {
+          const { lesson, color, css } = f;
+          Object.assign(f, data, { lesson, color, css, entities: {} });
+          const d = Cesium.JulianDate.toDate(f.start);
+          f.dateLabel = fmtDate(d);
+          f.timeLabel = `Departed ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+          f.route = f.from && f.to ? (f.from === f.to ? `${f.from} ⟲ local` : `${f.from} → ${f.to}`) : "";
+          buildFlightGraphics(f);
+          f.loaded = true;
+          f.loading = null;
+          applyStyles();
+          renderLogbook();
+          computeHeightOffset(f);
+          return f;
+        })
+        .catch((err) => {
+          console.error(err);
+          f.loading = null;
+          f.failed = true;
+          renderLogbook();
+          throw err;
+        });
+      renderLogbook();
+    }
+    return f.loading;
+  }
+
+  // Select a lesson, fetching its track first if needed. Only the latest click wins.
+  async function openFlight(f) {
+    state.pending = f;
+    try {
+      await ensureLoaded(f);
+    } catch (e) {
+      toast(`Couldn't load Lesson ${f.lesson}. Tap it to try again.`);
+      return;
+    }
+    if (state.pending === f && state.selected !== f) selectFlight(f);
+  }
+
+  async function openJourney() {
+    state.pending = null;
+    showJourney();
+    const pending = state.flights.filter((f) => !f.loaded);
+    if (!pending.length) return;
+    await Promise.allSettled(pending.map(ensureLoaded));
+    // Re-frame to include the newly loaded lessons if the user is still on the overview.
+    if (!state.selected && state.pending === null) showJourney();
   }
 
   function sampledTimes(prop) {
@@ -363,6 +449,7 @@
     const s = f.samples;
     const scene = state.viewer.scene;
     const exclude = state.flights.flatMap((x) => Object.values(x.entities)).concat(state.aircraft);
+    if (state.model) exclude.push(state.model);
     const sample = (idx) =>
       withTimeout(scene.sampleHeightMostDetailed(idx.map((i) => new Cesium.Cartographic(s[i].lon, s[i].lat)), exclude, 0.5), 30000)
         .then((res) => idx.map((i, j) => ({ i, h: res[j] && res[j].height })).filter((x) => Number.isFinite(x.h)));
@@ -557,25 +644,43 @@
         material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString("#ffd166"), glowPower: 0.3 }),
       },
     });
-    loadAircraftModel();
   }
 
+  // The Skyhawk glTF (~45 MB) is fetched in the background after the app is usable.
+  // It's a scene primitive rather than entity.model so it downloads even while hidden;
+  // the flat plane icon stands in until it's ready.
   async function loadAircraftModel() {
-    if (!CFG.aircraftModelAssetId) return;
+    if (!CFG.aircraftModelAssetId || state.model) return;
     try {
-      const uri = await Cesium.IonResource.fromAssetId(CFG.aircraftModelAssetId);
-      state.aircraft.model = new Cesium.ModelGraphics({
-        uri,
+      const url = await Cesium.IonResource.fromAssetId(CFG.aircraftModelAssetId);
+      const model = await Cesium.Model.fromGltfAsync({
+        url,
+        show: false,
         minimumPixelSize: 40,
         maximumScale: 600,
         distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, MODEL_MAX_DIST),
       });
-      // Flat icon only when the real-size Cessna would be too far away to read.
-      state.aircraft.billboard.distanceDisplayCondition = new Cesium.DistanceDisplayCondition(MODEL_MAX_DIST, Number.MAX_VALUE);
+      state.viewer.scene.primitives.add(model);
+      state.model = model;
+      model.readyEvent.addEventListener(() => {
+        // Flat icon only when the real-size Cessna would be too far away to read.
+        state.aircraft.billboard.distanceDisplayCondition = new Cesium.DistanceDisplayCondition(MODEL_MAX_DIST, Number.MAX_VALUE);
+      });
     } catch (e) {
       console.warn("Aircraft model failed to load", e);
-      toast("Couldn't load the Skyhawk 3D model — showing the icon instead.");
     }
+  }
+
+  const scratchModelQ = new Cesium.Quaternion();
+  const scratchModelM = new Cesium.Matrix4();
+  function updateAircraftModel(time) {
+    const m = state.model;
+    if (!m) return;
+    const a = state.aircraft;
+    const pos = a.show && state.selected && a.position && a.position.getValue(time);
+    const q = pos && a.orientation.getValue(time, scratchModelQ);
+    m.show = !!(pos && q);
+    if (m.show) m.modelMatrix = Cesium.Matrix4.fromTranslationQuaternionRotationScale(pos, q, new Cesium.Cartesian3(1, 1, 1), scratchModelM);
   }
 
   function attachAircraft(f) {
@@ -645,10 +750,11 @@
     document.querySelectorAll(".flight-card").forEach((c) => c.classList.remove("active"));
     ["#player", "#hud", "#camModes"].forEach((s) => $(s).classList.add("hidden"));
 
-    if (!state.flights.length) return;
-    const latest = state.flights[state.flights.length - 1];
+    const loaded = state.flights.filter((f) => f.loaded);
+    if (!loaded.length) return;
+    const latest = loaded[loaded.length - 1];
     v.clock.currentTime = Cesium.JulianDate.addSeconds(latest.start, latest.duration / 2, new Cesium.JulianDate());
-    const all = Cesium.BoundingSphere.fromBoundingSpheres(state.flights.map((f) => f.bounds));
+    const all = Cesium.BoundingSphere.fromBoundingSpheres(loaded.map((f) => f.bounds));
     flyToSphere(all, -48, 20, 2.8);
   }
 
@@ -861,35 +967,40 @@
 
   function renderLogbook() {
     const fl = state.flights;
-    const totalSec = fl.reduce((a, f) => a + f.duration, 0);
-    const hours = totalSec / 3600;
+    const ld = fl.filter((f) => f.loaded);
+    // Totals only cover downloaded lessons; "+" signals more to come.
+    const more = ld.length < fl.length ? "+" : "";
+    const hours = ld.reduce((a, f) => a + f.duration, 0) / 3600;
     $("#tailLabel").textContent = CFG.tailNumber;
     $("#statFlights").textContent = fl.length;
-    $("#statHours").textContent = `${hours.toFixed(1)}h`;
-    $("#statDistance").textContent = fmtNum(fl.reduce((a, f) => a + f.distance, 0) * M_TO_NM);
-    $("#statAlt").textContent = fl.length ? fmtNum(Math.max(...fl.map((f) => f.maxAlt)) * M_TO_FT, 0) : "–";
-    $("#progressText").textContent = `${hours.toFixed(1)} / ${CFG.pplTargetHours} hrs`;
+    $("#statHours").textContent = `${hours.toFixed(1)}h${more}`;
+    $("#statDistance").textContent = ld.length ? fmtNum(ld.reduce((a, f) => a + f.distance, 0) * M_TO_NM) + more : "–";
+    $("#statAlt").textContent = ld.length ? fmtNum(Math.max(...ld.map((f) => f.maxAlt)) * M_TO_FT, 0) + more : "–";
+    $("#progressText").textContent = `${hours.toFixed(1)}${more} / ${CFG.pplTargetHours} hrs`;
     requestAnimationFrame(() => {
       $("#progressFill").style.width = `${Math.min(100, (hours / CFG.pplTargetHours) * 100)}%`;
     });
 
-    const longest = fl.reduce((a, f) => (f.duration > (a ? a.duration : 0) ? f : a), null);
-    const highest = fl.reduce((a, f) => (f.maxAlt > (a ? a.maxAlt : -Infinity) ? f : a), null);
-    const farthest = fl.reduce((a, f) => (f.maxFromStart > (a ? a.maxFromStart : 0) ? f : a), null);
+    const longest = ld.reduce((a, f) => (f.duration > (a ? a.duration : 0) ? f : a), null);
+    const highest = ld.reduce((a, f) => (f.maxAlt > (a ? a.maxAlt : -Infinity) ? f : a), null);
+    const farthest = ld.reduce((a, f) => (f.maxFromStart > (a ? a.maxFromStart : 0) ? f : a), null);
+    const multi = ld.length > 1;
 
     const list = $("#flightList");
+    const scroll = list.scrollTop;
     list.innerHTML = "";
     // Newest lesson at the top of the timeline.
     for (const f of [...fl].reverse()) {
       const badges = [];
       if (f.lesson === 1) badges.push("🎉 First flight");
-      if (fl.length > 1 && f === longest) badges.push("⏱ Longest");
-      if (fl.length > 1 && f === highest) badges.push("⛰ Highest");
-      if (fl.length > 1 && f === farthest) badges.push("🧭 Farthest");
+      if (multi && f === longest) badges.push("⏱ Longest");
+      if (multi && f === highest) badges.push("⛰ Highest");
+      if (multi && f === farthest) badges.push("🧭 Farthest");
       if (f.lesson === fl.length && fl.length > 1) badges.push("✨ Latest");
 
+      const status = f.loading ? "Loading flight…" : f.failed ? "Couldn't load — tap to retry" : "Tap to load flight";
       const card = document.createElement("div");
-      card.className = "flight-card";
+      card.className = `flight-card${f.loaded ? "" : " unloaded"}${f.loading ? " loading" : ""}${state.selected === f ? " active" : ""}`;
       card.dataset.id = f.id;
       card.style.setProperty("--c", f.css);
       card.innerHTML = `
@@ -899,16 +1010,16 @@
             <div>
               <div class="lesson">Lesson ${f.lesson}</div>
               <div class="card-date">${f.dateLabel}</div>
-              <div class="card-route">${f.route || f.timeLabel}</div>
+              <div class="card-route">${f.loaded ? f.route || f.timeLabel : status}</div>
             </div>
-            <span class="tag">${f.type}</span>
+            ${f.loaded ? `<span class="tag">${f.type}</span>` : ""}
           </div>
           <div class="chips">
-            <div class="chip"><b>${fmtDuration(f.duration)}</b>Duration</div>
-            <div class="chip"><b>${fmtNum(f.distance * M_TO_NM, 1)}</b>nm</div>
-            <div class="chip"><b>${fmtNum(f.maxAlt * M_TO_FT)}</b>ft max</div>
+            <div class="chip"><b>${f.loaded ? fmtDuration(f.duration) : "–"}</b>Duration</div>
+            <div class="chip"><b>${f.loaded ? fmtNum(f.distance * M_TO_NM, 1) : "–"}</b>nm</div>
+            <div class="chip"><b>${f.loaded ? fmtNum(f.maxAlt * M_TO_FT) : "–"}</b>ft max</div>
           </div>
-          ${sparkline(f)}
+          ${f.loaded ? sparkline(f) : `<div class="spark spark-placeholder"></div>`}
           ${badges.length ? `<div class="badges">${badges.map((b) => `<span class="badge">${b}</span>`).join("")}</div>` : ""}
           <div class="notes"><textarea placeholder="What did you practice? Notes from your instructor…"></textarea></div>
         </div>`;
@@ -917,17 +1028,18 @@
       ta.addEventListener("input", () => localStorage.setItem(`note-${f.id}`, ta.value));
       ta.addEventListener("click", (e) => e.stopPropagation());
       card.querySelector(".card-body").addEventListener("click", () => {
-        if (state.selected !== f) selectFlight(f);
+        if (state.selected !== f) openFlight(f);
       });
       list.appendChild(card);
     }
+    list.scrollTop = scroll;
   }
 
   // ---------------------------------------------------------------- wiring
   function wireUi() {
     $("#journeyBtn").addEventListener("click", () => {
       document.documentElement.style.setProperty("--accent", "#4cc9f0");
-      showJourney();
+      openJourney();
     });
     $("#playBtn").addEventListener("click", togglePlay);
     document.querySelectorAll("#camModes button").forEach((b) => b.addEventListener("click", () => setCamMode(b.dataset.mode)));
@@ -955,9 +1067,9 @@
       const fl = state.flights;
       const idx = state.selected ? fl.indexOf(state.selected) : -1;
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
-      else if (e.key === "ArrowUp" || e.key === "ArrowRight") { if (idx < fl.length - 1) selectFlight(fl[idx + 1]); }
-      else if (e.key === "ArrowDown" || e.key === "ArrowLeft") { if (idx > 0) selectFlight(fl[idx - 1]); }
-      else if (e.key === "Escape") showJourney();
+      else if (e.key === "ArrowUp" || e.key === "ArrowRight") { if (idx < fl.length - 1) openFlight(fl[idx + 1]); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowLeft") { if (idx > 0) openFlight(fl[idx - 1]); }
+      else if (e.key === "Escape") { state.pending = null; showJourney(); }
     });
 
     // Leave chase mode when the user grabs the camera.
@@ -969,12 +1081,16 @@
       const picked = state.viewer.scene.pick(movement.position);
       if (!picked || !picked.id) return;
       const f = state.flights.find((x) => Object.values(x.entities).includes(picked.id));
-      if (f && f !== state.selected) selectFlight(f);
+      if (f && f !== state.selected) openFlight(f);
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     state.viewer.scene.preRender.addEventListener((scene, time) => {
-      if (!state.selected) return;
+      if (!state.selected) {
+        updateAircraftModel(time);
+        return;
+      }
       updateHud(time);
+      updateAircraftModel(time);
       updateChaseCamera(time);
       if (state.current.t !== chart.lastT) {
         chart.lastT = state.current.t;
@@ -998,46 +1114,31 @@
     createAircraft();
     wireUi();
 
-    setLoader("Finding your flights…");
-    const assets = await discoverAssets();
-    const flights = [];
-    let failures = 0;
-    for (const a of assets) {
-      setLoader(`Loading ${a.name || `asset ${a.id}`}…`);
+    state.flights = makeFlightStubs(await discoverAssets());
+    window.flightJourney = state;
+    renderLogbook();
+    setTimeout(() => $("#loader").classList.add("done"), 300);
+
+    // Only the latest lesson is downloaded up front; older ones load when opened.
+    let first = null;
+    for (const f of [...state.flights].reverse()) {
       try {
-        flights.push(await loadFlight(a));
+        first = await ensureLoaded(f);
+        break;
       } catch (err) {
-        console.error(err);
-        failures++;
+        // Try the next most recent lesson.
       }
     }
-
-    if (!flights.length) {
+    if (!first) {
       localStorage.removeItem("ionToken");
       return askForToken("Couldn't load any flights. Make sure the token has access to your N16237 assets.");
     }
-    if (failures) toast(`${failures} flight asset(s) could not be loaded.`);
 
-    flights.sort((a, b) => Cesium.JulianDate.compare(a.start, b.start));
-    flights.forEach((f, i) => {
-      f.lesson = i + 1;
-      f.color = gradientColor(flights.length > 1 ? i / (flights.length - 1) : 0);
-      f.css = f.color.toCssHexString();
-      const d = Cesium.JulianDate.toDate(f.start);
-      f.dateLabel = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-      f.timeLabel = `Departed ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-      f.route = f.from && f.to ? (f.from === f.to ? `${f.from} ⟲ local` : `${f.from} → ${f.to}`) : "";
-      buildFlightGraphics(f);
-    });
-    state.flights = flights;
-    window.flightJourney = state;
-
-    renderLogbook();
     showJourney();
-    setTimeout(() => $("#loader").classList.add("done"), 400);
 
-    // Refine altitudes against the 3D Tiles surface in the background.
-    for (const f of flights) await computeHeightOffset(f);
+    // Fetch the 3D Skyhawk once the app is interactive.
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
+    idle(() => loadAircraftModel(), { timeout: 3000 });
   }
 
   main().catch((err) => {
