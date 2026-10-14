@@ -377,8 +377,14 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   }
   .journey-btn { min-height: 42px; }
 
-  #credits { font-size: 9px; line-height: 1.3; }
-  #credits .cesium-credit-logoContainer img { height: 14px; }
+  #credits {
+    font-size: 9px; line-height: 14px; height: 14px; white-space: nowrap; overflow: hidden;
+    opacity: .75; text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
+    transition: bottom .35s cubic-bezier(.2, .8, .2, 1), opacity .3s;
+  }
+  #credits .cesium-credit-logoContainer img { height: 11px; }
+  #credits .cesium-widget-credits > * { vertical-align: middle; }
+  #logbook.dragging { transition: none !important; }
 }
 
 /* ---------- Portrait phone: bottom sheet ---------- */
@@ -390,16 +396,17 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
     --sheet-h: calc(60px + var(--safe-b));
   }
   body[data-sheet="half"] { --sheet-h: calc(min(380px, 54dvh) + var(--safe-b)); }
-  body[data-sheet="full"] { --sheet-h: calc(100dvh - var(--safe-t) - 48px); }
+  body[data-sheet="full"] { --sheet-h: calc(100dvh - var(--safe-t) - 92px); }
 
   #logbook {
     top: auto; left: 0; right: 0; bottom: 0; width: auto; height: var(--sheet-h);
     border-radius: 22px 22px 0 0; border-bottom: 0;
     padding: 12px 14px calc(10px + var(--safe-b));
     overflow: hidden; overflow: clip; z-index: 6;
-    transition: height .35s cubic-bezier(.2, .8, .2, 1);
+    transition: height .35s cubic-bezier(.2, .8, .2, 1), transform .3s cubic-bezier(.2, .8, .2, 1);
+    overscroll-behavior: contain;
   }
-  body[data-sheet="full"] .sheet-handle .chev { transform: rotate(180deg); }
+  body:not([data-sheet="peek"]) .sheet-handle .chev { transform: rotate(180deg); }
   body[data-sheet="peek"] #logbook > :not(.sheet-handle) { visibility: hidden; }
 
   .brand { margin-bottom: 12px; }
@@ -431,11 +438,9 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
   #hud { left: var(--gap); right: var(--gap); top: calc(var(--safe-t) + var(--gap)); }
   #camModes { top: calc(var(--safe-t) + 64px); right: var(--gap); padding: 4px; }
-  #credits {
-    top: calc(var(--safe-t) + 88px); left: var(--gap); right: auto; bottom: auto;
-    width: 55vw; text-align: left;
-  }
-  #player { left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + var(--gap)); }
+  /* Attribution: one quiet line between the player and the sheet. */
+  #credits { top: auto; left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 4px); text-align: center; }
+  #player { left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 22px); }
   #toast { top: calc(var(--safe-t) + 12px); }
 }
 
@@ -469,9 +474,9 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
   #hud { right: calc(var(--safe-r) + var(--gap)); top: var(--gap); width: min(360px, 46vw); }
   #camModes { top: 62px; right: calc(var(--safe-r) + var(--gap)); padding: 4px; }
-  #credits { top: 136px; bottom: auto; left: auto; right: calc(var(--safe-r) + var(--gap)); width: 40vw; }
+  #credits { top: auto; bottom: 3px; left: auto; right: calc(var(--safe-r) + var(--gap)); text-align: right; }
   #player {
-    bottom: var(--gap); right: calc(var(--safe-r) + var(--gap));
+    bottom: 20px; right: calc(var(--safe-r) + var(--gap));
     left: calc(var(--safe-l) + var(--panel-w) + var(--gap) * 2);
   }
   body[data-sheet="peek"] #player { left: calc(var(--safe-l) + var(--gap)); }

@@ -33,7 +33,8 @@
     const states = LANDSCAPE_MQ.matches ? ["peek", "full"] : SHEET_STATES;
     let i = states.indexOf(document.body.dataset.sheet);
     if (i < 0) i = 0;
-    if (dir === 0) i = (i + 1) % states.length;
+    // Tap: open to the first open state, or close from any open state.
+    if (dir === 0) i = i === 0 ? 1 : 0;
     else i = Cesium.Math.clamp(i + dir, 0, states.length - 1);
     setSheet(states[i]);
   }
@@ -1142,12 +1143,16 @@
       $("#chartBtn").classList.toggle("active", document.body.classList.toggle("chart-open"));
     });
 
-    // Bottom sheet: tap the handle to cycle, or swipe it up/down.
+    // Bottom sheet: tap the handle to open/close, swipe up to expand, swipe down anywhere to close.
     // The sheet clips its content; never let scrollIntoView scroll the sheet itself.
-    $("#logbook").addEventListener("scroll", (e) => (e.target.scrollTop = 0));
+    const sheet = $("#logbook");
+    sheet.addEventListener("scroll", () => (sheet.scrollTop = 0));
     const handle = $("#sheetHandle");
+
+    // Mouse (desktop testing / landscape with a trackpad): handle only.
     let dragY = null;
     handle.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse") return;
       dragY = e.clientY;
       handle.setPointerCapture(e.pointerId);
     });
@@ -1155,9 +1160,73 @@
       if (dragY === null) return;
       const dy = e.clientY - dragY;
       dragY = null;
-      stepSheet(Math.abs(dy) < 24 ? 0 : dy < 0 ? 1 : -1);
+      if (Math.abs(dy) < 24) stepSheet(0);
+      else if (dy < 0) stepSheet(1);
+      else closeSheetBy(dy);
     });
     handle.addEventListener("pointercancel", () => (dragY = null));
+
+    function closeSheetBy(dy) {
+      // A short pull from full drops to half; a long pull (or any pull from half) closes.
+      if (document.body.dataset.sheet === "full" && PORTRAIT_MQ.matches && dy < 220) setSheet("half");
+      else setSheet("peek");
+    }
+    const canScrollUp = (el) => {
+      for (; el && el !== sheet; el = el.parentElement) if (el.scrollTop > 0) return true;
+      return false;
+    };
+
+    // Touch: the whole sheet follows the finger when pulled down.
+    let g = null;
+    sheet.addEventListener(
+      "touchstart",
+      (e) => {
+        g = null;
+        if (!isPhone() || e.touches.length !== 1 || e.target.closest("textarea")) return;
+        const t = e.touches[0];
+        g = { x: t.clientX, y: t.clientY, dx: 0, dy: 0, axis: null, onHandle: !!e.target.closest("#sheetHandle"), blocked: canScrollUp(e.target) };
+      },
+      { passive: true }
+    );
+    sheet.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!g) return;
+        const t = e.touches[0];
+        g.dx = t.clientX - g.x;
+        g.dy = t.clientY - g.y;
+        if (!g.axis && Math.hypot(g.dx, g.dy) > 8) g.axis = Math.abs(g.dy) > Math.abs(g.dx) ? "y" : "x";
+        if (PORTRAIT_MQ.matches && g.axis === "y" && g.dy > 0 && !g.blocked && document.body.dataset.sheet !== "peek") {
+          sheet.classList.add("dragging");
+          sheet.style.transform = `translateY(${g.dy}px)`;
+        }
+      },
+      { passive: true }
+    );
+    const endGesture = () => {
+      if (!g) return;
+      const { dx, dy, axis, onHandle, blocked } = g;
+      g = null;
+      sheet.classList.remove("dragging");
+      sheet.style.transform = "";
+      const open = document.body.dataset.sheet !== "peek";
+      if (onHandle && !axis) return stepSheet(0);
+      if (LANDSCAPE_MQ.matches) {
+        // Side panel: swipe left (or down on the handle) to collapse.
+        if (open && ((axis === "x" && dx < -50) || (onHandle && axis === "y" && dy > 30))) setSheet("peek");
+        else if (!open && axis) setSheet("full");
+        return;
+      }
+      if (axis !== "y") return;
+      if (dy < -30 && (onHandle || !open)) stepSheet(1);
+      else if (dy > 50 && open && !blocked) closeSheetBy(dy);
+    };
+    sheet.addEventListener("touchend", endGesture);
+    sheet.addEventListener("touchcancel", () => {
+      g = null;
+      sheet.classList.remove("dragging");
+      sheet.style.transform = "";
+    });
 
     const scrub = $("#scrub");
     let scrubbing = false;
