@@ -587,7 +587,7 @@
   }
 
   // All tracks are downloaded at startup, but only the latest is drawn until the
-  // user opens the journey overview or picks a lesson.
+  // user asks to visualize all flight paths or picks a lesson.
   const isVisible = (f) => f.loaded && (state.showAll || f === state.defaultFlight || f === state.selected);
 
   function applyStyles() {
@@ -1147,7 +1147,7 @@
     }
 
     state.defaultFlight = first;
-    showJourney();
+    selectFlight(first);
 
     // Download the remaining lessons in the background (kept hidden until requested).
     Promise.allSettled(state.flights.filter((f) => !f.loaded).map(ensureLoaded));
