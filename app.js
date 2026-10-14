@@ -17,6 +17,27 @@
     "M32 2c2.2 0 3.6 2.6 3.6 6v14l22 12v6l-22-6v13l7 5v5l-10.6-3-10.6 3v-5l7-5V34l-22 6v-6l22-12V8c0-3.4 1.4-6 3.6-6z";
 
   const $ = (s, r = document) => r.querySelector(s);
+
+  // Phone layouts: portrait gets a bottom sheet, landscape a collapsible side panel.
+  const PORTRAIT_MQ = matchMedia("(max-width: 600px)");
+  const LANDSCAPE_MQ = matchMedia("(max-height: 500px) and (min-width: 601px)");
+  const isPhone = () => PORTRAIT_MQ.matches || LANDSCAPE_MQ.matches;
+  const renderScale = () => Math.min(window.devicePixelRatio || 1, isPhone() ? 1 : 1.5);
+
+  const SHEET_STATES = ["peek", "half", "full"];
+  function setSheet(s) {
+    document.body.dataset.sheet = s;
+  }
+  function stepSheet(dir) {
+    // Landscape has no half state: the side panel is either collapsed or open.
+    const states = LANDSCAPE_MQ.matches ? ["peek", "full"] : SHEET_STATES;
+    let i = states.indexOf(document.body.dataset.sheet);
+    if (i < 0) i = 0;
+    if (dir === 0) i = (i + 1) % states.length;
+    else i = Cesium.Math.clamp(i + dir, 0, states.length - 1);
+    setSheet(states[i]);
+  }
+  const collapseSheetOnPhone = () => isPhone() && setSheet("peek");
   const state = {
     viewer: null,
     tileset: null,
@@ -26,6 +47,7 @@
     aircraft: null,
     current: { alt: 0, spd: 0, vs: 0, hdg: 0, idx: 0 },
     chaseHeading: undefined,
+    openNotes: new Set(),
   };
 
   // ---------------------------------------------------------------- utils
@@ -137,7 +159,7 @@
     scene.skyAtmosphere.show = true;
     scene.fog.enabled = true;
     scene.postProcessStages.fxaa.enabled = true;
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
+    viewer.resolutionScale = renderScale();
     viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
     state.viewer = viewer;
@@ -721,8 +743,19 @@
 
   function flyToSphere(sphere, pitchDeg = -45, heading = 0, scale = 2.6) {
     releaseCamera();
-    const range = Math.max(sphere.radius * scale, 2500);
-    state.viewer.camera.flyToBoundingSphere(sphere, {
+    // Portrait phones have a narrow horizontal FOV and the bottom of the screen is
+    // covered by the player/sheet, so pull back and aim a bit short of the center.
+    const portrait = PORTRAIT_MQ.matches;
+    const range = Math.max(sphere.radius * scale * (portrait ? 1.3 : 1), 2500);
+    let target = sphere;
+    if (portrait) {
+      const h = Cesium.Math.toRadians(heading);
+      const enu = Cesium.Transforms.eastNorthUpToFixedFrame(sphere.center);
+      const back = Cesium.Matrix4.multiplyByPointAsVector(enu, new Cesium.Cartesian3(-Math.sin(h), -Math.cos(h), 0), new Cesium.Cartesian3());
+      const center = Cesium.Cartesian3.add(sphere.center, Cesium.Cartesian3.multiplyByScalar(back, range * 0.08, back), new Cesium.Cartesian3());
+      target = new Cesium.BoundingSphere(center, sphere.radius);
+    }
+    state.viewer.camera.flyToBoundingSphere(target, {
       duration: 2.4,
       offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(heading), Cesium.Math.toRadians(pitchDeg), range),
       easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
@@ -749,11 +782,17 @@
     if (state.camMode !== "chase" || !state.selected) return;
     const pos = state.aircraft.position.getValue(time);
     if (!pos) return;
-    const target = Cesium.Math.toRadians(state.current.hdg);
-    if (state.chaseHeading === undefined) state.chaseHeading = target;
-    let d = Cesium.Math.negativePiToPi(target - state.chaseHeading);
+    const hdg = Cesium.Math.toRadians(state.current.hdg);
+    if (state.chaseHeading === undefined) state.chaseHeading = hdg;
+    let d = Cesium.Math.negativePiToPi(hdg - state.chaseHeading);
     state.chaseHeading += d * 0.04;
-    state.viewer.camera.lookAt(pos, new Cesium.HeadingPitchRange(state.chaseHeading, Cesium.Math.toRadians(-12), CHASE_RANGE));
+    let target = pos;
+    if (PORTRAIT_MQ.matches) {
+      // Aim slightly below the aircraft so it sits in the visible part of the screen above the player.
+      const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(pos, new Cesium.Cartesian3());
+      target = Cesium.Cartesian3.add(pos, Cesium.Cartesian3.multiplyByScalar(up, -CHASE_RANGE * 0.1, up), new Cesium.Cartesian3());
+    }
+    state.viewer.camera.lookAt(target, new Cesium.HeadingPitchRange(state.chaseHeading, Cesium.Math.toRadians(-12), CHASE_RANGE));
   }
 
   // ---------------------------------------------------------------- selection
@@ -798,7 +837,7 @@
       c.classList.toggle("active", on);
       if (on) card = c;
     });
-    if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
 
     $("#playerTitle").textContent = `Lesson ${f.lesson}${f.tail ? " · " + f.tail : ""} · ${f.dateLabel}${f.route ? " · " + f.route : ""}`;
     document.documentElement.style.setProperty("--accent", f.css);
@@ -844,6 +883,7 @@
     $("#hudHdg").textContent = String(Math.round(c.hdg) % 360).padStart(3, "0");
     $("#clockTime").textContent = Cesium.JulianDate.toDate(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     $("#elapsed").textContent = `${fmtDuration(c.t, true)} / ${fmtDuration(f.duration, true)}`;
+    $("#scrubFill").style.width = `${(100 * Cesium.Math.clamp(c.t / f.duration, 0, 1)).toFixed(2)}%`;
   }
 
   function syncPlayButton() {
@@ -965,6 +1005,14 @@
     state.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(f.start, u * f.duration, new Cesium.JulianDate());
   }
 
+  function scrubBarTo(clientX) {
+    const f = state.selected;
+    if (!f) return;
+    const r = $("#scrub").getBoundingClientRect();
+    const u = Cesium.Math.clamp((clientX - r.left) / r.width, 0, 1);
+    state.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(f.start, u * f.duration, new Cesium.JulianDate());
+  }
+
   // ---------------------------------------------------------------- logbook UI
   function sparkline(f) {
     const s = f.samples, W = 300, H = 34;
@@ -994,6 +1042,7 @@
     $("#statDistance").textContent = ld.length ? fmtNum(ld.reduce((a, f) => a + f.distance, 0) * M_TO_NM) + more : "–";
     $("#statAlt").textContent = ld.length ? fmtNum(Math.max(...ld.map((f) => f.maxAlt)) * M_TO_FT, 0) + more : "–";
     $("#progressText").textContent = `${hours.toFixed(1)}${more} / ${CFG.pplTargetHours} hrs`;
+    $("#sheetSummary").innerHTML = `<b>${fl.length} lesson${fl.length === 1 ? "" : "s"}</b> · ${hours.toFixed(1)}${more} hrs logged`;
     requestAnimationFrame(() => {
       $("#progressFill").style.width = `${Math.min(100, (hours / CFG.pplTargetHours) * 100)}%`;
     });
@@ -1005,6 +1054,7 @@
 
     const list = $("#flightList");
     const scroll = list.scrollTop;
+    const scrollX = list.scrollLeft;
     list.innerHTML = "";
     // Newest lesson at the top of the timeline.
     for (const f of [...fl].reverse()) {
@@ -1017,7 +1067,7 @@
 
       const status = f.loading ? "Loading flight…" : f.failed ? "Couldn't load — tap to retry" : "Tap to load flight";
       const card = document.createElement("div");
-      card.className = `flight-card${f.loaded ? "" : " unloaded"}${f.loading ? " loading" : ""}${state.selected === f ? " active" : ""}`;
+      card.className = `flight-card${f.loaded ? "" : " unloaded"}${f.loading ? " loading" : ""}${state.selected === f ? " active" : ""}${state.openNotes.has(f.id) ? " notes-open" : ""}`;
       card.dataset.id = f.id;
       card.style.setProperty("--c", f.css);
       card.innerHTML = `
@@ -1038,34 +1088,91 @@
           </div>
           ${f.loaded ? sparkline(f) : `<div class="spark spark-placeholder"></div>`}
           ${badges.length ? `<div class="badges">${badges.map((b) => `<span class="badge">${b}</span>`).join("")}</div>` : ""}
-          <div class="notes"><textarea placeholder="What did you practice? Notes from your instructor…"></textarea></div>
+          <div class="notes"><button class="notes-toggle mobile-only">📝 Notes</button><textarea placeholder="What did you practice? Notes from your instructor…"></textarea></div>
         </div>`;
       const ta = card.querySelector("textarea");
       ta.value = localStorage.getItem(`note-${f.id}`) || "";
+      card.querySelector(".notes-toggle").textContent = ta.value ? "📝 Notes ✓" : "📝 Add notes";
+      card.querySelector(".notes-toggle").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = card.classList.toggle("notes-open");
+        state.openNotes[open ? "add" : "delete"](f.id);
+        if (open) ta.focus();
+      });
       ta.addEventListener("input", () => localStorage.setItem(`note-${f.id}`, ta.value));
       ta.addEventListener("click", (e) => e.stopPropagation());
       card.querySelector(".card-body").addEventListener("click", () => {
+        collapseSheetOnPhone();
         if (state.selected !== f) openFlight(f);
       });
       list.appendChild(card);
     }
     list.scrollTop = scroll;
+    list.scrollLeft = scrollX;
   }
 
   // ---------------------------------------------------------------- wiring
   function wireUi() {
     $("#journeyBtn").addEventListener("click", () => {
       document.documentElement.style.setProperty("--accent", "#4cc9f0");
+      collapseSheetOnPhone();
       openJourney();
     });
     $("#playBtn").addEventListener("click", togglePlay);
-    document.querySelectorAll("#camModes button").forEach((b) => b.addEventListener("click", () => setCamMode(b.dataset.mode)));
-    document.querySelectorAll("#speeds button").forEach((b) =>
+
+    // On phones the camera and speed controls collapse to their active button; tapping it cycles.
+    const cycleNext = (buttons, b) => buttons[(buttons.indexOf(b) + 1) % buttons.length];
+    const camButtons = [...document.querySelectorAll("#camModes button")];
+    camButtons.forEach((b) =>
       b.addEventListener("click", () => {
-        document.querySelectorAll("#speeds button").forEach((x) => x.classList.toggle("active", x === b));
-        state.viewer.clock.multiplier = Number(b.dataset.speed);
+        const next = isPhone() && b.classList.contains("active") ? cycleNext(camButtons, b) : b;
+        setCamMode(next.dataset.mode);
       })
     );
+    const speedButtons = [...document.querySelectorAll("#speeds button")];
+    speedButtons.forEach((b) =>
+      b.addEventListener("click", () => {
+        const next = isPhone() && b.classList.contains("active") ? cycleNext(speedButtons, b) : b;
+        speedButtons.forEach((x) => x.classList.toggle("active", x === next));
+        state.viewer.clock.multiplier = Number(next.dataset.speed);
+      })
+    );
+
+    $("#chartBtn").addEventListener("click", () => {
+      $("#chartBtn").classList.toggle("active", document.body.classList.toggle("chart-open"));
+    });
+
+    // Bottom sheet: tap the handle to cycle, or swipe it up/down.
+    const handle = $("#sheetHandle");
+    let dragY = null;
+    handle.addEventListener("pointerdown", (e) => {
+      dragY = e.clientY;
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener("pointerup", (e) => {
+      if (dragY === null) return;
+      const dy = e.clientY - dragY;
+      dragY = null;
+      stepSheet(Math.abs(dy) < 24 ? 0 : dy < 0 ? 1 : -1);
+    });
+    handle.addEventListener("pointercancel", () => (dragY = null));
+
+    const scrub = $("#scrub");
+    let scrubbing = false;
+    scrub.addEventListener("pointerdown", (e) => {
+      scrubbing = true;
+      scrub.setPointerCapture(e.pointerId);
+      scrubBarTo(e.clientX);
+    });
+    scrub.addEventListener("pointermove", (e) => scrubbing && scrubBarTo(e.clientX));
+    scrub.addEventListener("pointerup", () => (scrubbing = false));
+
+    const onLayoutChange = () => {
+      state.viewer.resolutionScale = renderScale();
+      if (!isPhone()) setSheet("peek");
+    };
+    PORTRAIT_MQ.addEventListener("change", onLayoutChange);
+    LANDSCAPE_MQ.addEventListener("change", onLayoutChange);
 
     chart.canvas = $("#chart");
     chart.ctx = chart.canvas.getContext("2d");
