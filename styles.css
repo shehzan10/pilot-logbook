@@ -378,12 +378,12 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   .journey-btn { min-height: 42px; }
 
   #credits {
-    font-size: 9px; line-height: 14px; height: 14px; white-space: nowrap; overflow: hidden;
+    font-size: 9px; line-height: 16px; height: 16px; white-space: nowrap; overflow: hidden;
     opacity: .75; text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
     transition: bottom .35s cubic-bezier(.2, .8, .2, 1), opacity .3s;
   }
-  #credits .cesium-credit-logoContainer img { height: 11px; }
-  #credits .cesium-widget-credits > * { vertical-align: middle; }
+  #credits img { height: 12px !important; width: auto !important; vertical-align: middle; }
+  #credits .cesium-widget-credits { display: flex !important; align-items: center; justify-content: center; gap: 6px; height: 16px; }
   #logbook.dragging { transition: none !important; }
 }
 
@@ -474,7 +474,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
   #hud { right: calc(var(--safe-r) + var(--gap)); top: var(--gap); width: min(360px, 46vw); }
   #camModes { top: 62px; right: calc(var(--safe-r) + var(--gap)); padding: 4px; }
-  #credits { top: auto; bottom: 3px; left: auto; right: calc(var(--safe-r) + var(--gap)); text-align: right; }
+  #credits { top: auto; bottom: 2px; left: calc(var(--safe-l) + var(--gap)); right: calc(var(--safe-r) + var(--gap)); }
+  #credits .cesium-widget-credits { justify-content: flex-end; }
   #player {
     bottom: 20px; right: calc(var(--safe-r) + var(--gap));
     left: calc(var(--safe-l) + var(--panel-w) + var(--gap) * 2);
