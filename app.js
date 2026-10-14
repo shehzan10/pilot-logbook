@@ -2,7 +2,7 @@
   "use strict";
 
   const CFG = Object.assign(
-    { ionAccessToken: "", tailNumber: "N16237", flightAssetIds: [], pplTargetHours: 40 },
+    { ionAccessToken: "", flightAssetIds: [], pplTargetHours: 40 },
     window.APP_CONFIG || {}
   );
 
@@ -158,12 +158,12 @@
   async function discoverAssets() {
     const ids = new Map(CFG.flightAssetIds.map((id) => [id, null]));
     try {
-      const url = `https://api.cesium.com/v1/assets?search=${encodeURIComponent(CFG.tailNumber)}&limit=1000`;
+      const url = `https://api.cesium.com/v1/assets?limit=1000`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${Cesium.Ion.defaultAccessToken}` } });
       if (res.ok) {
         const json = await res.json();
         for (const a of json.items || []) {
-          if (a.name && a.name.startsWith(CFG.tailNumber) && a.status === "COMPLETE") ids.set(a.id, a.name);
+          if (a.type === "KML" && a.status === "COMPLETE" && tailFromName(a.name) && dateFromName(a.name)) ids.set(a.id, a.name);
         }
       }
     } catch (e) {
@@ -191,11 +191,17 @@
     return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
   }
 
+  // Aircraft registration at the start of the asset name, e.g. "N16237 - 2026-10-14" or "C-GABC 2026-…".
+  function tailFromName(name) {
+    const m = name && name.trim().match(/^([A-Z0-9]{1,3}-?[A-Z0-9]{2,5})\b/i);
+    return m && /[A-Z]/i.test(m[1]) && !/^\d{4}-\d{2}/.test(m[1]) ? m[1].toUpperCase() : null;
+  }
+
   const fmtDate = (d) => d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 
   // Flights are placeholders until their KML is fetched (on demand, newest first).
   function makeFlightStubs(assets) {
-    const stubs = assets.map((a) => ({ id: a.id, name: a.name, nameDate: dateFromName(a.name), loaded: false, entities: {} }));
+    const stubs = assets.map((a) => ({ id: a.id, name: a.name, tail: tailFromName(a.name), nameDate: dateFromName(a.name), loaded: false, entities: {} }));
     stubs.sort((a, b) => (a.nameDate && b.nameDate ? a.nameDate - b.nameDate : 0) || (a.id > b.id ? 1 : -1));
     stubs.forEach((f, i) => {
       f.lesson = i + 1;
@@ -212,8 +218,8 @@
       f.failed = false;
       f.loading = loadFlight(f)
         .then((data) => {
-          const { lesson, color, css } = f;
-          Object.assign(f, data, { lesson, color, css, entities: {} });
+          const { lesson, color, css, tail } = f;
+          Object.assign(f, data, { lesson, color, css, entities: {}, tail: tail || tailFromName(data.name) });
           const d = Cesium.JulianDate.toDate(f.start);
           f.dateLabel = fmtDate(d);
           f.timeLabel = `Departed ${d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
@@ -432,7 +438,7 @@
     if (samples.length < 2) throw new Error(`No track found in asset ${asset.id}`);
     const f = {
       id: asset.id,
-      name: asset.name || ds.name || `${CFG.tailNumber} flight`,
+      name: asset.name || ds.name || "Flight",
       samples,
       points,
       offset: 0,
@@ -794,7 +800,7 @@
     });
     if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
-    $("#playerTitle").textContent = `Lesson ${f.lesson} · ${f.dateLabel}${f.route ? " · " + f.route : ""}`;
+    $("#playerTitle").textContent = `Lesson ${f.lesson}${f.tail ? " · " + f.tail : ""} · ${f.dateLabel}${f.route ? " · " + f.route : ""}`;
     document.documentElement.style.setProperty("--accent", f.css);
     ["#player", "#hud", "#camModes"].forEach((s) => $(s).classList.remove("hidden"));
     setCamMode("overview");
@@ -983,7 +989,6 @@
     // Totals only cover downloaded lessons; "+" signals more to come.
     const more = ld.length < fl.length ? "+" : "";
     const hours = ld.reduce((a, f) => a + f.duration, 0) / 3600;
-    $("#tailLabel").textContent = CFG.tailNumber;
     $("#statFlights").textContent = fl.length;
     $("#statHours").textContent = `${hours.toFixed(1)}h${more}`;
     $("#statDistance").textContent = ld.length ? fmtNum(ld.reduce((a, f) => a + f.distance, 0) * M_TO_NM) + more : "–";
@@ -1020,7 +1025,7 @@
         <div class="card-body">
           <div class="card-top">
             <div>
-              <div class="lesson">Lesson ${f.lesson}</div>
+              <div class="lesson">Lesson ${f.lesson}${f.tail ? `<span class="tail" title="Aircraft">✈ ${f.tail}</span>` : ""}</div>
               <div class="card-date">${f.dateLabel}</div>
               <div class="card-route">${f.loaded ? f.route || f.timeLabel : status}</div>
             </div>
@@ -1143,7 +1148,7 @@
     }
     if (!first) {
       localStorage.removeItem("ionToken");
-      return askForToken("Couldn't load any flights. Make sure the token has access to your N16237 assets.");
+      return askForToken("Couldn't load any flights. Make sure the token has access to your flight assets.");
     }
 
     state.defaultFlight = first;
