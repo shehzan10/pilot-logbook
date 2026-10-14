@@ -241,6 +241,7 @@
   // Select a lesson, fetching its track first if needed. Only the latest click wins.
   async function openFlight(f) {
     state.pending = f;
+    state.showAll = true;
     try {
       await ensureLoaded(f);
     } catch (e) {
@@ -252,6 +253,7 @@
 
   async function openJourney() {
     state.pending = null;
+    state.showAll = true;
     showJourney();
     const pending = state.flights.filter((f) => !f.loaded);
     if (!pending.length) return;
@@ -584,12 +586,22 @@
     return (curtainCache[css] = c);
   }
 
+  // All tracks are downloaded at startup, but only the latest is drawn until the
+  // user opens the journey overview or picks a lesson.
+  const isVisible = (f) => f.loaded && (state.showAll || f === state.defaultFlight || f === state.selected);
+
   function applyStyles() {
     const sel = state.selected;
     for (const f of state.flights) {
       const on = !sel || sel === f;
       const e = f.entities;
       if (!e.line) continue;
+      const visible = isVisible(f);
+      e.line.show = visible;
+      if (!visible) {
+        e.wall.show = e.shadow.show = e.startPin.show = false;
+        continue;
+      }
       e.line.polyline.width = sel === f ? 6 : on ? 5 : 3;
       e.line.polyline.material = new Cesium.PolylineGlowMaterialProperty({
         color: on ? f.color : f.color.withAlpha(0.3),
@@ -750,7 +762,7 @@
     document.querySelectorAll(".flight-card").forEach((c) => c.classList.remove("active"));
     ["#player", "#hud", "#camModes"].forEach((s) => $(s).classList.add("hidden"));
 
-    const loaded = state.flights.filter((f) => f.loaded);
+    const loaded = state.flights.filter(isVisible);
     if (!loaded.length) return;
     const latest = loaded[loaded.length - 1];
     v.clock.currentTime = Cesium.JulianDate.addSeconds(latest.start, latest.duration / 2, new Cesium.JulianDate());
@@ -1069,7 +1081,7 @@
       if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       else if (e.key === "ArrowUp" || e.key === "ArrowRight") { if (idx < fl.length - 1) openFlight(fl[idx + 1]); }
       else if (e.key === "ArrowDown" || e.key === "ArrowLeft") { if (idx > 0) openFlight(fl[idx - 1]); }
-      else if (e.key === "Escape") { state.pending = null; showJourney(); }
+      else if (e.key === "Escape") openJourney();
     });
 
     // Leave chase mode when the user grabs the camera.
@@ -1134,7 +1146,11 @@
       return askForToken("Couldn't load any flights. Make sure the token has access to your N16237 assets.");
     }
 
+    state.defaultFlight = first;
     showJourney();
+
+    // Download the remaining lessons in the background (kept hidden until requested).
+    Promise.allSettled(state.flights.filter((f) => !f.loaded).map(ensureLoaded));
 
     // Fetch the 3D Skyhawk once the app is interactive.
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
