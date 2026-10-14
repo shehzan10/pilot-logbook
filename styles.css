@@ -354,7 +354,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
   #clockTime, .player-time .dot { display: none; }
   .player-title { font-size: 14px; }
-  .player-time { font-size: 11.5px; }
+  .player-time { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sheetSummary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .player-row { gap: 10px; }
   .play-btn { width: 40px; height: 40px; }
   .play-btn svg { width: 19px; height: 19px; }
@@ -395,7 +396,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
     top: auto; left: 0; right: 0; bottom: 0; width: auto; height: var(--sheet-h);
     border-radius: 22px 22px 0 0; border-bottom: 0;
     padding: 12px 14px calc(10px + var(--safe-b));
-    overflow: hidden; z-index: 6;
+    overflow: hidden; overflow: clip; z-index: 6;
     transition: height .35s cubic-bezier(.2, .8, .2, 1);
   }
   body[data-sheet="full"] .sheet-handle .chev { transform: rotate(180deg); }
@@ -429,8 +430,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   #hud { left: var(--gap); right: var(--gap); top: calc(var(--safe-t) + var(--gap)); }
   #camModes { top: calc(var(--safe-t) + 64px); right: var(--gap); padding: 4px; }
   #credits {
-    top: calc(var(--safe-t) + 66px); left: var(--gap); right: auto; bottom: auto;
-    max-width: 55vw; text-align: left;
+    top: calc(var(--safe-t) + 76px); left: var(--gap); right: auto; bottom: auto;
+    width: 55vw; text-align: left;
   }
   #player { left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + var(--gap)); }
   #toast { top: calc(var(--safe-t) + 12px); }
@@ -456,7 +457,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   .sheet-handle .chev { transform: rotate(-90deg); }
   body[data-sheet="full"] .sheet-handle .chev { transform: rotate(90deg); }
 
-  body[data-sheet="peek"] #logbook { width: 210px; bottom: auto; height: 46px; padding: 6px 12px; overflow: hidden; }
+  body[data-sheet="peek"] #logbook { width: 250px; bottom: auto; height: 46px; padding: 6px 12px; overflow: hidden; }
   body[data-sheet="peek"] #logbook > :not(.sheet-handle) { display: none; }
   body[data-sheet="peek"] .sheet-handle .grip { display: none; }
   body[data-sheet="peek"] .sheet-handle { margin: 0; padding: 4px 0; }
@@ -465,7 +466,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
   #hud { right: calc(var(--safe-r) + var(--gap)); top: var(--gap); width: min(360px, 46vw); }
   #camModes { top: 62px; right: calc(var(--safe-r) + var(--gap)); padding: 4px; }
-  #credits { top: 112px; bottom: auto; left: auto; right: calc(var(--safe-r) + var(--gap)); max-width: 40vw; }
+  #credits { top: 112px; bottom: auto; left: auto; right: calc(var(--safe-r) + var(--gap)); width: 40vw; }
   #player {
     bottom: var(--gap); right: calc(var(--safe-r) + var(--gap));
     left: calc(var(--safe-l) + var(--panel-w) + var(--gap) * 2);

@@ -1143,6 +1143,8 @@
     });
 
     // Bottom sheet: tap the handle to cycle, or swipe it up/down.
+    // The sheet clips its content; never let scrollIntoView scroll the sheet itself.
+    $("#logbook").addEventListener("scroll", (e) => (e.target.scrollTop = 0));
     const handle = $("#sheetHandle");
     let dragY = null;
     handle.addEventListener("pointerdown", (e) => {
