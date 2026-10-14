@@ -422,6 +422,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
     flex: 0 0 84%; padding-left: 0; margin-bottom: 0; scroll-snap-align: center;
     overflow-y: auto; overscroll-behavior: contain;
   }
+  body[data-sheet="half"] .flight-card { scrollbar-width: none; }
+  body[data-sheet="half"] .flight-card::-webkit-scrollbar { display: none; }
   body[data-sheet="half"] .flight-card::before,
   body[data-sheet="half"] .flight-card .node { display: none; }
 
@@ -430,7 +432,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   #hud { left: var(--gap); right: var(--gap); top: calc(var(--safe-t) + var(--gap)); }
   #camModes { top: calc(var(--safe-t) + 64px); right: var(--gap); padding: 4px; }
   #credits {
-    top: calc(var(--safe-t) + 76px); left: var(--gap); right: auto; bottom: auto;
+    top: calc(var(--safe-t) + 88px); left: var(--gap); right: auto; bottom: auto;
     width: 55vw; text-align: left;
   }
   #player { left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + var(--gap)); }
@@ -449,9 +451,10 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
     transition: width .3s, height .3s, bottom .3s;
   }
   #logbook .brand { display: none; }
-  .stats { gap: 5px; }
-  .stat { padding: 7px 8px; }
+  .stats { gap: 5px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .stat { padding: 7px 4px; min-width: 0; }
   .stat-value { font-size: 14px; }
+  .stat-label { font-size: 8px; letter-spacing: 0.04em; }
   .progress { margin: 10px 0; }
   .section-title { margin: 10px 2px 6px; }
   .sheet-handle .chev { transform: rotate(-90deg); }
@@ -466,7 +469,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 
   #hud { right: calc(var(--safe-r) + var(--gap)); top: var(--gap); width: min(360px, 46vw); }
   #camModes { top: 62px; right: calc(var(--safe-r) + var(--gap)); padding: 4px; }
-  #credits { top: 112px; bottom: auto; left: auto; right: calc(var(--safe-r) + var(--gap)); width: 40vw; }
+  #credits { top: 136px; bottom: auto; left: auto; right: calc(var(--safe-r) + var(--gap)); width: 40vw; }
   #player {
     bottom: var(--gap); right: calc(var(--safe-r) + var(--gap));
     left: calc(var(--safe-l) + var(--panel-w) + var(--gap) * 2);
