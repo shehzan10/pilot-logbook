@@ -1043,7 +1043,7 @@
     $("#statDistance").textContent = ld.length ? fmtNum(ld.reduce((a, f) => a + f.distance, 0) * M_TO_NM) + more : "–";
     $("#statAlt").textContent = ld.length ? fmtNum(Math.max(...ld.map((f) => f.maxAlt)) * M_TO_FT, 0) + more : "–";
     $("#progressText").textContent = `${hours.toFixed(1)}${more} / ${CFG.pplTargetHours} hrs`;
-    $("#sheetSummary").innerHTML = `<b>${fl.length} lesson${fl.length === 1 ? "" : "s"}</b> · ${hours.toFixed(1)}${more} hrs logged`;
+    $("#sheetSummary").innerHTML = `<b>Logbook</b> · ${fl.length} lesson${fl.length === 1 ? "" : "s"} · ${hours.toFixed(1)}${more} hrs logged`;
     requestAnimationFrame(() => {
       $("#progressFill").style.width = `${Math.min(100, (hours / CFG.pplTargetHours) * 100)}%`;
     });

@@ -380,7 +380,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   #credits {
     font-size: 9px; line-height: 16px; height: 16px; white-space: nowrap; overflow: hidden;
     opacity: .75; text-shadow: 0 1px 3px rgba(0, 0, 0, .8);
-    transition: bottom .35s cubic-bezier(.2, .8, .2, 1), opacity .3s;
+    transition: opacity .25s, visibility .25s;
   }
   #credits img { height: 12px !important; width: auto !important; vertical-align: middle; }
   #credits .cesium-widget-credits { display: flex !important; align-items: center; justify-content: center; gap: 6px; height: 16px; }
@@ -439,7 +439,8 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   #hud { left: var(--gap); right: var(--gap); top: calc(var(--safe-t) + var(--gap)); }
   #camModes { top: calc(var(--safe-t) + 64px); right: var(--gap); padding: 4px; }
   /* Attribution: one quiet line between the player and the sheet. */
-  #credits { top: auto; left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 4px); text-align: center; }
+  #credits { top: auto; left: var(--gap); right: var(--gap); bottom: calc(64px + var(--safe-b)); text-align: center; }
+  body:not([data-sheet="peek"]) #credits { opacity: 0; visibility: hidden; }
   #player { left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 22px); }
   #toast { top: calc(var(--safe-t) + 12px); }
 }
@@ -465,7 +466,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
   .sheet-handle .chev { transform: rotate(-90deg); }
   body[data-sheet="full"] .sheet-handle .chev { transform: rotate(90deg); }
 
-  body[data-sheet="peek"] #logbook { width: 250px; bottom: auto; height: 46px; padding: 6px 12px; overflow: hidden; }
+  body[data-sheet="peek"] #logbook { width: 320px; bottom: auto; height: 46px; padding: 6px 12px; overflow: hidden; }
   body[data-sheet="peek"] #logbook > :not(.sheet-handle) { display: none; }
   body[data-sheet="peek"] .sheet-handle .grip { display: none; }
   body[data-sheet="peek"] .sheet-handle { margin: 0; padding: 4px 0; }
