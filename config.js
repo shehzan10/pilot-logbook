@@ -2,7 +2,7 @@
 // The Cesium ion access token can also be supplied via ?token=... in the URL
 // or entered in the in-app prompt (it is then stored in localStorage).
 window.APP_CONFIG = {
-  ionAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IlZhSlZoVk9BY2JTQld6QVgiLCJqdGkiOiI4MGZiOTMzZS1mYTdhLTQ4MDktOTUxMy0yMjU1MGE5MTVhZTEiLCJpZCI6NTI5NDg4LCJzdWIiOiJ6c21vaGFtbWVkLXBlcnNvbmFsIiwiaXNzIjoiaHR0cHM6Ly9hcGkuY2VzaXVtLmNvbSIsImF1ZCI6IlBpbG90IExvZ2Jvb2sgKHB1YmxpYywgR2l0SHViIFBhZ2VzKSIsImlhdCI6MTc5MjM0NzI0Nn0.JJAq_YZQj0LZb4k4m3GpRMgVloK6DcatfTHd8-NXWEI",
+  ionAccessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6IlpHSFlmQy1jS044UUlBZWIiLCJqdGkiOiI4MGZiOTMzZS1mYTdhLTQ4MDktOTUxMy0yMjU1MGE5MTVhZTEiLCJpZCI6NTI5NDg4LCJzdWIiOiJ6c21vaGFtbWVkLXBlcnNvbmFsIiwiaXNzIjoiaHR0cHM6Ly9hcGkuY2VzaXVtLmNvbSIsImF1ZCI6IlBpbG90IExvZ2Jvb2sgKHB1YmxpYywgR2l0SHViIFBhZ2VzKSIsImlhdCI6MTc5MjM0NzI2OX0.fBQW1_o_sKBknmtrRvMxCdw49qa9A9NtF3Ii084cAWY",
   // Flight assets (KML ADS-B tracks), named "<tail number> - YYYY-MM-DD", e.g.
   // "N16237 - 2026-10-14". The tail number and date are read from the name.
   // If the token has the assets:list scope, matching KML assets are also auto-discovered.
