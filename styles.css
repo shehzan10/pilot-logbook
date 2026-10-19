@@ -224,7 +224,6 @@ body.flight-open #mapTools { top: 150px; }
 .tool-btn:hover { background: var(--bg-strong); }
 .tool.open > .tool-btn { background: var(--text); color: #0b1020; }
 .compass svg { width: 40px; height: 40px; }
-#compassRose { transform-origin: 22px 22px; }
 .compass.north { opacity: .78; }
 
 .tool-panel, .search-panel {
