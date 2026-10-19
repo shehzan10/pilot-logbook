@@ -771,7 +771,7 @@
     if (!f) return;
     releaseCamera();
     if (mode === "overview") {
-      flyToSphere(f.bounds, -42, state.current.hdg - 30, 2.4);
+      flyToSphere(f.bounds, -42, 0, 2.4);
     } else if (mode === "orbit") {
       state.aircraft.viewFrom = new Cesium.Cartesian3(-35, -55, 22);
       state.viewer.trackedEntity = state.aircraft;
@@ -815,7 +815,7 @@
     const latest = loaded[loaded.length - 1];
     v.clock.currentTime = Cesium.JulianDate.addSeconds(latest.start, latest.duration / 2, new Cesium.JulianDate());
     const all = Cesium.BoundingSphere.fromBoundingSpheres(loaded.map((f) => f.bounds));
-    flyToSphere(all, -48, 20, 2.8);
+    flyToSphere(all, -48, 0, 2.8);
   }
 
   function selectFlight(f) {
@@ -1119,11 +1119,14 @@
   // ---------------------------------------------------------------- map tools
   // Google Maps 2D imagery assets in Cesium ion.
   const OVERLAYS = { labels: 3830185, roadmap: 3830184, satLabels: 3830183, sat: 3830182 };
-  const layers = { elev: "google3d", overlay: "labels", cache: new Map(), terrain: null };
+  // Each elevation source remembers its own overlay.
+  const layers = { elev: "google3d", overlays: { google3d: "labels", cwt: "satLabels" }, cache: new Map(), terrain: null };
   try {
-    const saved = JSON.parse(localStorage.getItem("mapLayers") || "{}");
+    const saved = JSON.parse(localStorage.getItem("mapLayers.v2") || "{}");
     if (["google3d", "cwt"].includes(saved.elev)) layers.elev = saved.elev;
-    if (saved.overlay === "none" || OVERLAYS[saved.overlay]) layers.overlay = saved.overlay;
+    const o = saved.overlays || {};
+    if (o.google3d === "none" || OVERLAYS[o.google3d]) layers.overlays.google3d = o.google3d;
+    if (OVERLAYS[o.cwt]) layers.overlays.cwt = o.cwt;
   } catch (e) {
     // Ignore bad saved settings.
   }
@@ -1145,7 +1148,8 @@
     if (!ts) layers.elev = "cwt";
     const google = layers.elev === "google3d";
     // Terrain has no surface without imagery, so an overlay is required there.
-    if (!google && layers.overlay === "none") layers.overlay = "satLabels";
+    if (!google && !OVERLAYS[layers.overlays.cwt]) layers.overlays.cwt = "satLabels";
+    const overlay = layers.overlays[layers.elev];
 
     if (ts) ts.show = google;
     scene.globe.show = !google;
@@ -1160,12 +1164,12 @@
     const other = google ? v.imageryLayers : ts && ts.imageryLayers;
     if (other) other.removeAll(false);
     target.removeAll(false);
-    if (layers.overlay !== "none") target.add(overlayLayer(google ? "tiles" : "globe", layers.overlay));
+    if (overlay !== "none") target.add(overlayLayer(google ? "tiles" : "globe", overlay));
 
-    localStorage.setItem("mapLayers", JSON.stringify({ elev: layers.elev, overlay: layers.overlay }));
+    localStorage.setItem("mapLayers.v2", JSON.stringify({ elev: layers.elev, overlays: layers.overlays }));
     document.querySelectorAll("#layersPanel [data-elev]").forEach((b) => b.classList.toggle("active", b.dataset.elev === layers.elev));
     document.querySelectorAll("#layersPanel [data-overlay]").forEach((b) => {
-      b.classList.toggle("active", b.dataset.overlay === layers.overlay);
+      b.classList.toggle("active", b.dataset.overlay === overlay);
       b.classList.toggle("unavailable", !google && b.dataset.overlay === "none");
     });
     const gBtn = $('#layersPanel [data-elev="google3d"]');
@@ -1431,7 +1435,7 @@
     );
     document.querySelectorAll("#layersPanel [data-overlay]").forEach((b) =>
       b.addEventListener("click", () => {
-        layers.overlay = b.dataset.overlay;
+        layers.overlays[layers.elev] = b.dataset.overlay;
         applyLayers();
       })
     );
