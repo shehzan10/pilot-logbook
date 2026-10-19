@@ -475,7 +475,8 @@
   // reports are 0 ft). Ground samples are placed on the sampled 3D Tiles surface, and
   // the airborne MSL->ellipsoid offset is calibrated at takeoff/landing transitions.
   async function computeHeightOffset(f) {
-    if (!state.tileset || f.offsetComputed) return;
+    // Heights are sampled from the 3D Tiles surface; wait until they are shown again.
+    if (!state.tileset || !state.tileset.show || f.offsetComputed) return;
     f.offsetComputed = true;
     const s = f.samples;
     const scene = state.viewer.scene;
@@ -807,6 +808,7 @@
     $("#journeyBtn").classList.add("active");
     document.querySelectorAll(".flight-card").forEach((c) => c.classList.remove("active"));
     ["#player", "#hud", "#camModes"].forEach((s) => $(s).classList.add("hidden"));
+    document.body.classList.remove("flight-open");
 
     const loaded = state.flights.filter(isVisible);
     if (!loaded.length) return;
@@ -843,6 +845,7 @@
     $("#playerTitle").textContent = `Lesson ${f.lesson}${f.tail ? " · " + f.tail : ""} · ${f.dateLabel}${f.route ? " · " + f.route : ""}`;
     document.documentElement.style.setProperty("--accent", f.css);
     ["#player", "#hud", "#camModes"].forEach((s) => $(s).classList.remove("hidden"));
+    document.body.classList.add("flight-open");
     setCamMode("overview");
     drawChart();
     computeHeightOffset(f);
@@ -1113,7 +1116,336 @@
   }
 
   // ---------------------------------------------------------------- wiring
+  // ---------------------------------------------------------------- map tools
+  // Google Maps 2D imagery assets in Cesium ion.
+  const OVERLAYS = { labels: 3830185, roadmap: 3830184, satLabels: 3830183, sat: 3830182 };
+  const layers = { elev: "google3d", overlay: "labels", cache: new Map(), terrain: null };
+  try {
+    const saved = JSON.parse(localStorage.getItem("mapLayers") || "{}");
+    if (["google3d", "cwt"].includes(saved.elev)) layers.elev = saved.elev;
+    if (saved.overlay === "none" || OVERLAYS[saved.overlay]) layers.overlay = saved.overlay;
+  } catch (e) {
+    // Ignore bad saved settings.
+  }
+
+  const worldTerrain = () => (layers.terrain ||= Cesium.CesiumTerrainProvider.fromIonAssetId(1));
+
+  function overlayLayer(target, key) {
+    const k = `${target}:${key}`;
+    if (!layers.cache.has(k)) {
+      layers.cache.set(k, Cesium.ImageryLayer.fromProviderAsync(Cesium.IonImageryProvider.fromAssetId(OVERLAYS[key])));
+    }
+    return layers.cache.get(k);
+  }
+
+  function applyLayers() {
+    const v = state.viewer;
+    const scene = v.scene;
+    const ts = state.tileset;
+    if (!ts) layers.elev = "cwt";
+    const google = layers.elev === "google3d";
+    // Terrain has no surface without imagery, so an overlay is required there.
+    if (!google && layers.overlay === "none") layers.overlay = "satLabels";
+
+    if (ts) ts.show = google;
+    scene.globe.show = !google;
+    if (!google && !layers.terrainSet) {
+      layers.terrainSet = true;
+      scene.globe.depthTestAgainstTerrain = true;
+      scene.globe.baseColor = Cesium.Color.fromCssColorString("#0b1020");
+      scene.setTerrain(new Cesium.Terrain(worldTerrain()));
+    }
+
+    const target = google ? ts.imageryLayers : v.imageryLayers;
+    const other = google ? v.imageryLayers : ts && ts.imageryLayers;
+    if (other) other.removeAll(false);
+    target.removeAll(false);
+    if (layers.overlay !== "none") target.add(overlayLayer(google ? "tiles" : "globe", layers.overlay));
+
+    localStorage.setItem("mapLayers", JSON.stringify({ elev: layers.elev, overlay: layers.overlay }));
+    document.querySelectorAll("#layersPanel [data-elev]").forEach((b) => b.classList.toggle("active", b.dataset.elev === layers.elev));
+    document.querySelectorAll("#layersPanel [data-overlay]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.overlay === layers.overlay);
+      b.classList.toggle("unavailable", !google && b.dataset.overlay === "none");
+    });
+    const gBtn = $('#layersPanel [data-elev="google3d"]');
+    if (gBtn) gBtn.disabled = !ts;
+    if (google && state.selected) computeHeightOffset(state.selected);
+    scene.requestRender();
+  }
+
+  // Free the camera from tracking without flying, e.g. before jumping to a searched place.
+  function freeCamera() {
+    if (state.camMode !== "overview") {
+      state.camMode = "overview";
+      document.querySelectorAll("#camModes button").forEach((b) => b.classList.toggle("active", b.dataset.mode === "overview"));
+    }
+    cancelNorthUp();
+    releaseCamera();
+  }
+
+  async function flyToPlace(bbox) {
+    const [w, s, e, n] = bbox;
+    const rect = Cesium.Rectangle.fromDegrees(w, s, e, n);
+    const c = Cesium.Rectangle.center(rect);
+    const diag = Cesium.Cartesian3.distance(
+      Cesium.Cartesian3.fromRadians(rect.west, rect.south),
+      Cesium.Cartesian3.fromRadians(rect.east, rect.north)
+    );
+    let height = 0;
+    try {
+      const [p] = await withTimeout(Cesium.sampleTerrainMostDetailed(await worldTerrain(), [c.clone()]), 3000);
+      if (Number.isFinite(p.height)) height = p.height;
+    } catch (err) {
+      // Fall back to the ellipsoid surface.
+    }
+    freeCamera();
+    const range = Cesium.Math.clamp(diag * 1.15, 1500, 4e6);
+    const pitch = diag > 60000 ? -70 : -45;
+    state.viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(Cesium.Cartesian3.fromRadians(c.longitude, c.latitude, height), 0), {
+      duration: 2.4,
+      offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(pitch), range),
+      easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
+    });
+  }
+
+  // ---- compass / north-up
+  const compass = { raf: 0, freeLook: false, lastDeg: NaN };
+
+  function updateCompass() {
+    const deg = Math.round(Cesium.Math.toDegrees(Cesium.Math.negativePiToPi(state.viewer.camera.heading)) * 10) / 10;
+    if (deg === compass.lastDeg) return;
+    compass.lastDeg = deg;
+    $("#compassRose").setAttribute("transform", `rotate(${-deg} 22 22)`);
+    $("#compassBtn").classList.toggle("north", Math.abs(deg) < 0.5);
+  }
+
+  function cancelNorthUp() {
+    if (!compass.raf) return;
+    cancelAnimationFrame(compass.raf);
+    compass.raf = 0;
+    if (compass.freeLook) state.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  }
+
+  function tween(ms, step, done) {
+    const t0 = performance.now();
+    const frame = (now) => {
+      const t = Math.min(1, (now - t0) / ms);
+      step(t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+      if (t < 1) compass.raf = requestAnimationFrame(frame);
+      else {
+        compass.raf = 0;
+        done && done();
+      }
+    };
+    compass.raf = requestAnimationFrame(frame);
+  }
+
+  // Heading/pitch/range of the camera looking at a point, from its offset in that point's local frame.
+  function hprFromOffset(o) {
+    const r = Cesium.Cartesian3.magnitude(o);
+    return { h: Math.atan2(-o.x, -o.y), p: Math.asin(Cesium.Math.clamp(-o.z / r, -1, 1)), r };
+  }
+
+  function centerPivot() {
+    const scene = state.viewer.scene;
+    const cam = scene.camera;
+    const c = new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2);
+    let p;
+    if (scene.globe.show) p = scene.globe.pick(cam.getPickRay(c), scene);
+    if (!p && scene.pickPositionSupported) {
+      try { p = scene.pickPosition(c); } catch (e) { p = undefined; }
+    }
+    if (!p) p = cam.pickEllipsoid(c);
+    if (p && Cesium.Cartesian3.distance(p, cam.positionWC) > 2e7) p = undefined;
+    return p;
+  }
+
+  function northUp() {
+    const v = state.viewer;
+    const cam = v.camera;
+    cancelNorthUp();
+    cam.cancelFlight();
+    if (state.camMode === "chase") {
+      // Chase follows the aircraft heading; switch to orbit so the view can face north.
+      setCamMode("orbit");
+      requestAnimationFrame(() => requestAnimationFrame(northUp));
+      return;
+    }
+    compass.freeLook = false;
+    if (v.trackedEntity) {
+      const { h, p, r } = hprFromOffset(cam.position);
+      const d = Cesium.Math.negativePiToPi(-h);
+      tween(700, (k) => cam.lookAtTransform(cam.transform, new Cesium.HeadingPitchRange(h + d * k, p, r)));
+      return;
+    }
+    const pivot = centerPivot();
+    if (!pivot) {
+      const h = cam.heading, p = cam.pitch, d = Cesium.Math.negativePiToPi(-h);
+      tween(700, (k) => cam.setView({ orientation: { heading: h + d * k, pitch: p, roll: 0 } }));
+      return;
+    }
+    const toLocal = Cesium.Matrix4.inverseTransformation(Cesium.Transforms.eastNorthUpToFixedFrame(pivot), new Cesium.Matrix4());
+    const { h, p, r } = hprFromOffset(Cesium.Matrix4.multiplyByPoint(toLocal, cam.positionWC, new Cesium.Cartesian3()));
+    const d = Cesium.Math.negativePiToPi(-h);
+    compass.freeLook = true;
+    tween(
+      700,
+      (k) => cam.lookAt(pivot, new Cesium.HeadingPitchRange(h + d * k, p, r)),
+      () => {
+        compass.freeLook = false;
+        cam.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      }
+    );
+  }
+
+  // ---- popovers + search
+  function setTool(name) {
+    ["search", "layers"].forEach((t) => {
+      const on = t === name;
+      $("#" + t).classList.toggle("open", on);
+      $(`#${t}Btn`).setAttribute("aria-expanded", String(on));
+    });
+    if (name === "search") setTimeout(() => $("#searchInput").focus(), 50);
+    else $("#searchInput").blur();
+  }
+  const openTool = () => document.querySelector("#mapTools .tool.open");
+
+  function wireMapTools() {
+    const geo = { ctrl: null, timer: 0, features: [], active: -1 };
+    const input = $("#searchInput");
+    const list = $("#searchResults");
+    const credit = $("#searchCredit");
+    const PIN = '<svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 5.2-7 13-7 13S5 14.2 5 9a7 7 0 0 1 7-7Zm0 4.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg>';
+
+    const message = (text) => {
+      list.innerHTML = "";
+      const li = document.createElement("li");
+      li.className = "msg";
+      li.textContent = text;
+      list.append(li);
+    };
+    const bboxOf = (f) => {
+      if (Array.isArray(f.bbox) && f.bbox.length === 4) return f.bbox;
+      const c = f.geometry && f.geometry.coordinates;
+      return Array.isArray(c) ? [c[0], c[1], c[0], c[1]] : null;
+    };
+    const highlight = (i) => {
+      geo.active = i;
+      [...list.children].forEach((li, j) => li.classList.toggle("active", j === i));
+    };
+
+    function render(json) {
+      geo.features = (json.features || []).filter(bboxOf);
+      geo.active = -1;
+      list.innerHTML = "";
+      if (!geo.features.length) return message("No places found");
+      geo.features.forEach((f, i) => {
+        const li = document.createElement("li");
+        li.setAttribute("role", "option");
+        li.innerHTML = PIN;
+        const span = document.createElement("span");
+        span.textContent = (f.properties && f.properties.label) || "Unnamed place";
+        li.append(span);
+        li.addEventListener("click", () => choose(i));
+        list.append(li);
+      });
+      // Geocoder attribution (Google) must be shown alongside results.
+      const attrs = (json.attributions || []).map((a) => a.html).filter(Boolean);
+      credit.innerHTML = attrs.join("");
+      credit.classList.toggle("show", attrs.length > 0);
+    }
+
+    async function query(kind, text) {
+      if (geo.ctrl) geo.ctrl.abort();
+      const ctrl = (geo.ctrl = new AbortController());
+      const url = `https://api.cesium.com/v1/geocode/${kind}?geocoder=google&text=${encodeURIComponent(text)}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${Cesium.Ion.defaultAccessToken}` }, signal: ctrl.signal });
+      if (!res.ok) throw new Error(`Geocoder error ${res.status}`);
+      return res.json();
+    }
+
+    function choose(i) {
+      const f = geo.features[i];
+      if (!f) return;
+      input.value = (f.properties && f.properties.label) || input.value;
+      setTool(null);
+      collapseSheetOnPhone();
+      flyToPlace(bboxOf(f));
+    }
+
+    input.addEventListener("input", () => {
+      clearTimeout(geo.timer);
+      const text = input.value.trim();
+      if (text.length < 2) {
+        if (geo.ctrl) geo.ctrl.abort();
+        list.innerHTML = "";
+        credit.classList.remove("show");
+        return;
+      }
+      geo.timer = setTimeout(() => {
+        query("autocomplete", text).then(render).catch((e) => e.name !== "AbortError" && message("Search is unavailable right now"));
+      }, 250);
+    });
+    input.addEventListener("keydown", (e) => {
+      const n = geo.features.length;
+      if (e.key === "ArrowDown" && n) { e.preventDefault(); highlight((geo.active + 1) % n); }
+      else if (e.key === "ArrowUp" && n) { e.preventDefault(); highlight((geo.active - 1 + n) % n); }
+      else if (e.key === "Escape") { e.preventDefault(); setTool(null); }
+    });
+    $("#searchForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearTimeout(geo.timer);
+      if (geo.active >= 0) return choose(geo.active);
+      const text = input.value.trim();
+      if (!text) return;
+      try {
+        render(await query("search", text));
+        if (geo.features.length) choose(0);
+      } catch (err) {
+        if (err.name !== "AbortError") message("Search is unavailable right now");
+      }
+    });
+    $("#searchClose").addEventListener("click", () => {
+      if (input.value) {
+        input.value = "";
+        list.innerHTML = "";
+        credit.classList.remove("show");
+        input.focus();
+      } else setTool(null);
+    });
+
+    $("#searchBtn").addEventListener("click", () => setTool($("#search").classList.contains("open") ? null : "search"));
+    $("#layersBtn").addEventListener("click", () => setTool($("#layers").classList.contains("open") ? null : "layers"));
+    document.querySelectorAll("#layersPanel [data-elev]").forEach((b) =>
+      b.addEventListener("click", () => {
+        layers.elev = b.dataset.elev;
+        applyLayers();
+      })
+    );
+    document.querySelectorAll("#layersPanel [data-overlay]").forEach((b) =>
+      b.addEventListener("click", () => {
+        layers.overlay = b.dataset.overlay;
+        applyLayers();
+      })
+    );
+    $("#compassBtn").addEventListener("click", northUp);
+
+    // Tap/click anywhere else closes popovers; touching the map also cancels a north-up turn.
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (!e.target.closest("#mapTools")) setTool(null);
+        if (e.target === state.viewer.scene.canvas) cancelNorthUp();
+      },
+      true
+    );
+    state.viewer.scene.canvas.addEventListener("wheel", cancelNorthUp, { passive: true });
+  }
+
+  // ---------------------------------------------------------------- ui
   function wireUi() {
+    wireMapTools();
     $("#journeyBtn").addEventListener("click", () => {
       document.documentElement.style.setProperty("--accent", "#4cc9f0");
       collapseSheetOnPhone();
@@ -1261,10 +1593,12 @@
       if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
       const fl = state.flights;
       const idx = state.selected ? fl.indexOf(state.selected) : -1;
-      if (e.code === "Space") { e.preventDefault(); togglePlay(); }
+      if (e.key === "/") { e.preventDefault(); setTool("search"); }
+      else if (e.key === "n" || e.key === "N") northUp();
+      else if (e.code === "Space") { e.preventDefault(); togglePlay(); }
       else if (e.key === "ArrowUp" || e.key === "ArrowRight") { if (idx < fl.length - 1) openFlight(fl[idx + 1]); }
       else if (e.key === "ArrowDown" || e.key === "ArrowLeft") { if (idx > 0) openFlight(fl[idx - 1]); }
-      else if (e.key === "Escape") openJourney();
+      else if (e.key === "Escape") { if (openTool()) setTool(null); else openJourney(); }
     });
 
     // Leave chase mode when the user grabs the camera.
@@ -1280,6 +1614,7 @@
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     state.viewer.scene.preRender.addEventListener((scene, time) => {
+      updateCompass();
       if (!state.selected) {
         updateAircraftModel(time);
         return;
@@ -1306,6 +1641,7 @@
     Cesium.Ion.defaultAccessToken = token;
 
     await createViewer();
+    applyLayers();
     createAircraft();
     wireUi();
 

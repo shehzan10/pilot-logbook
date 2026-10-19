@@ -68,6 +68,58 @@
     <button data-mode="orbit">Orbit</button>
   </div>
 
+  <div id="mapTools">
+    <div id="search" class="tool">
+      <button id="searchBtn" class="tool-btn glass" title="Search places (/)" aria-label="Search places" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.42 1.4-5.39-5.38A8 8 0 1 1 10 2Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"/></svg>
+      </button>
+      <form id="searchForm" class="search-panel glass" role="search" autocomplete="off">
+        <div class="search-row">
+          <svg class="search-icon" viewBox="0 0 24 24"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.42 1.4-5.39-5.38A8 8 0 1 1 10 2Zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"/></svg>
+          <input id="searchInput" type="search" placeholder="Search places or airports" enterkeyhint="search" aria-label="Search places" spellcheck="false" />
+          <button id="searchClose" type="button" class="search-close" aria-label="Close search">
+            <svg viewBox="0 0 24 24"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+          </button>
+        </div>
+        <ul id="searchResults" class="search-results" role="listbox"></ul>
+        <div id="searchCredit" class="search-credit"></div>
+      </form>
+    </div>
+
+    <div id="layers" class="tool">
+      <button id="layersBtn" class="tool-btn glass" title="Map layers" aria-label="Map layers" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><path d="M12 2.5 1.5 8 12 13.5 22.5 8 12 2.5Zm-8.1 8.8L1.5 12.6 12 18.1l10.5-5.5-2.4-1.3L12 15.6l-8.1-4.3Zm0 4.6-2.4 1.3L12 22.7l10.5-5.5-2.4-1.3L12 20.2l-8.1-4.3Z"/></svg>
+      </button>
+      <div id="layersPanel" class="tool-panel glass" role="dialog" aria-label="Map layers">
+        <div class="tp-title">Elevation</div>
+        <div class="seg">
+          <button type="button" data-elev="google3d"><b>Photorealistic 3D</b><small>Google 3D Tiles</small></button>
+          <button type="button" data-elev="cwt"><b>World Terrain</b><small>Cesium terrain</small></button>
+        </div>
+        <div class="tp-title">Imagery overlay</div>
+        <div class="opts">
+          <button type="button" data-overlay="labels"><i class="sw sw-labels">Aa</i>Labels only</button>
+          <button type="button" data-overlay="roadmap"><i class="sw sw-roadmap"></i>Roadmap</button>
+          <button type="button" data-overlay="satLabels"><i class="sw sw-sat">Aa</i>Satellite with labels</button>
+          <button type="button" data-overlay="sat"><i class="sw sw-sat"></i>Satellite</button>
+          <button type="button" data-overlay="none"><i class="sw sw-none"></i>None</button>
+        </div>
+      </div>
+    </div>
+
+    <button id="compassBtn" class="tool-btn glass compass" title="Reset to north-up (N)" aria-label="Reset map to north-up">
+      <svg viewBox="0 0 44 44">
+        <g id="compassRose">
+          <circle cx="22" cy="22" r="17" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5" />
+          <path d="M22 5v3M22 36v3M5 22h3M36 22h3" stroke="rgba(255,255,255,.45)" stroke-width="1.5" />
+          <text x="22" y="15.5" text-anchor="middle" font-size="7.5" font-weight="800" fill="#ff5a5f" font-family="Inter, sans-serif">N</text>
+          <path d="M22 16.5 25 22h-6z" fill="#ff5a5f" />
+          <path d="M22 29 19 22h6z" fill="rgba(255,255,255,.8)" />
+        </g>
+      </svg>
+    </button>
+  </div>
+
   <footer id="player" class="glass hidden">
     <div class="player-row">
       <button id="playBtn" class="play-btn" title="Play / pause (Space)">
