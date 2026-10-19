@@ -1269,7 +1269,13 @@
     if (state.camMode === "chase") {
       // Chase follows the aircraft heading; switch to orbit so the view can face north.
       setCamMode("orbit");
-      requestAnimationFrame(() => requestAnimationFrame(northUp));
+      let tries = 0;
+      const waitForOrbit = () => {
+        const ready = v.trackedEntity && !Cesium.Matrix4.equals(cam.transform, Cesium.Matrix4.IDENTITY);
+        if (ready || ++tries > 60) northUp();
+        else compass.raf = requestAnimationFrame(waitForOrbit);
+      };
+      compass.raf = requestAnimationFrame(waitForOrbit);
       return;
     }
     compass.freeLook = false;
