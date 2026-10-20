@@ -510,7 +510,9 @@ body.flight-open #mapTools { top: 150px; }
   body[data-sheet="half"] .flight-list::-webkit-scrollbar { display: none; }
   body[data-sheet="half"] .flight-card {
     flex: 0 0 84%; padding-left: 0; margin-bottom: 0; scroll-snap-align: center;
-    overflow-y: auto; overscroll-behavior: contain;
+    /* Contain vertical scrolling only, so horizontal swipes pass through to the card row. */
+    overflow-x: hidden; overflow-y: auto; overscroll-behavior-x: auto; overscroll-behavior-y: contain;
+    touch-action: pan-x pan-y;
   }
   body[data-sheet="half"] .flight-card { scrollbar-width: none; }
   body[data-sheet="half"] .flight-card::-webkit-scrollbar { display: none; }

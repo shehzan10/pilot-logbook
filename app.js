@@ -26,7 +26,23 @@
 
   const SHEET_STATES = ["peek", "half", "full"];
   function setSheet(s) {
+    const prev = document.body.dataset.sheet;
     document.body.dataset.sheet = s;
+    if (s !== prev && s !== "peek") requestAnimationFrame(() => revealActiveCard(false));
+  }
+  // Scroll the flight list (not the sheet) so the selected lesson is in view.
+  function revealActiveCard(smooth) {
+    const list = document.querySelector(".flight-list");
+    const card = list && list.querySelector(".flight-card.active");
+    if (!card) return;
+    const lr = list.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const behavior = smooth ? "smooth" : "instant";
+    if (getComputedStyle(list).display === "flex") {
+      list.scrollTo({ left: list.scrollLeft + cr.left - lr.left - (lr.width - cr.width) / 2, behavior });
+    } else if (cr.top < lr.top || cr.bottom > lr.bottom) {
+      list.scrollTo({ top: list.scrollTop + cr.top - lr.top - 8, behavior });
+    }
   }
   function stepSheet(dir) {
     // Landscape has no half state: the side panel is either collapsed or open.
@@ -840,7 +856,7 @@
       c.classList.toggle("active", on);
       if (on) card = c;
     });
-    if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    if (card) revealActiveCard(true);
 
     $("#playerTitle").textContent = `Lesson ${f.lesson}${f.tail ? " · " + f.tail : ""} · ${f.dateLabel}${f.route ? " · " + f.route : ""}`;
     document.documentElement.style.setProperty("--accent", f.css);
