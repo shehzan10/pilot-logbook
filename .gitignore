@@ -1,0 +1,11 @@
+# Secrets: the personal ion admin token must never be committed.
+ion-token.txt
+*.token
+.env*
+
+# Local tooling and working files
+node_modules/
+*.glb
+*.gltf
+.DS_Store
+Thumbs.db

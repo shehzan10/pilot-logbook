@@ -523,9 +523,14 @@ body.flight-open #mapTools { top: 150px; }
 
   #hud { left: var(--gap); right: var(--gap); top: calc(var(--safe-t) + var(--gap)); }
   #camModes { top: calc(var(--safe-t) + 64px); right: var(--gap); padding: 4px; }
-  /* Attribution: one quiet line between the player and the sheet. */
-  #credits { top: auto; left: var(--gap); right: var(--gap); bottom: calc(64px + var(--safe-b)); text-align: center; }
-  body:not([data-sheet="peek"]) #credits { opacity: 0; visibility: hidden; }
+  /* Attribution: one quiet line riding just above the sheet in every state, because the map
+     is still on screen above it (Google's terms require the attribution whenever it is). */
+  #credits {
+    top: auto; left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 4px); text-align: center;
+    transition: bottom .35s cubic-bezier(.2, .8, .2, 1), opacity .25s;
+  }
+  /* The full sheet leaves only a strip of map; the camera buttons would collide with the credits there. */
+  body[data-sheet="full"] #camModes { opacity: 0; pointer-events: none; }
   #player { left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 22px); }
   #toast { top: calc(var(--safe-t) + 12px); }
 

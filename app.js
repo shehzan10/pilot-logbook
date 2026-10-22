@@ -125,16 +125,42 @@
   }
 
   // ---------------------------------------------------------------- token
-  function resolveToken() {
+  // Candidates in priority order: ?token= in the URL, config.js, then a token typed into the
+  // in-app prompt. Each is checked against ion so a stale config token (ion regenerates the
+  // value on every edit) falls back to the stored one instead of looping on the prompt.
+  function tokenCandidates() {
     const params = new URLSearchParams(location.search);
     const fromUrl = params.get("token");
     if (fromUrl) {
       localStorage.setItem("ionToken", fromUrl);
       params.delete("token");
       history.replaceState(null, "", location.pathname + (params.toString() ? `?${params}` : ""));
-      return fromUrl;
     }
-    return CFG.ionAccessToken || localStorage.getItem("ionToken") || "";
+    const list = [fromUrl, CFG.ionAccessToken, localStorage.getItem("ionToken")].filter(Boolean);
+    return [...new Set(list)];
+  }
+
+  // false only when ion definitively rejects the token; network errors give it the benefit of the doubt.
+  async function tokenWorks(token) {
+    const id = CFG.flightAssetIds.find((x) => typeof x === "number");
+    if (!id) return true;
+    try {
+      const res = await withTimeout(
+        fetch(`https://api.cesium.com/v1/assets/${id}`, { headers: { Authorization: `Bearer ${token}` } }),
+        8000
+      );
+      return res.status !== 401 && res.status !== 403;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  async function resolveToken() {
+    for (const t of tokenCandidates()) {
+      if (await tokenWorks(t)) return t;
+      if (t === localStorage.getItem("ionToken")) localStorage.removeItem("ionToken");
+    }
+    return "";
   }
 
   function askForToken(reason) {
@@ -649,10 +675,14 @@
         continue;
       }
       e.line.polyline.width = sel === f ? 6 : on ? 5 : 3;
-      e.line.polyline.material = new Cesium.PolylineGlowMaterialProperty({
+      // Reuse one material per look so restyling doesn't churn allocations and shader updates.
+      const look = sel === f ? "selected" : on ? "on" : "dim";
+      const mats = (f.materials ||= {});
+      mats[look] ||= new Cesium.PolylineGlowMaterialProperty({
         color: on ? f.color : f.color.withAlpha(0.3),
         glowPower: sel === f ? 0.25 : 0.2,
       });
+      if (e.line.polyline.material !== mats[look]) e.line.polyline.material = mats[look];
       e.wall.show = sel === f;
       e.shadow.show = sel === f;
       e.startPin.show = !sel;
@@ -891,9 +921,14 @@
     };
   }
 
+  // The scene renders every frame; skip the DOM writes when nothing moved (paused, or between ticks).
+  const hudLast = { f: null, time: new Cesium.JulianDate() };
   function updateHud(time) {
     const f = state.selected;
     if (!f) return;
+    if (hudLast.f === f && Cesium.JulianDate.equals(time, hudLast.time)) return;
+    hudLast.f = f;
+    Cesium.JulianDate.clone(time, hudLast.time);
     const c = (state.current = stateAt(f, time));
     $("#hudAlt").textContent = c.ground ? "GND" : fmtNum(Math.round((c.alt * M_TO_FT) / 10) * 10);
     $("#hudAlt").nextElementSibling.style.visibility = c.ground ? "hidden" : "";
@@ -1662,8 +1697,8 @@
 
   // ---------------------------------------------------------------- main
   async function main() {
-    const token = resolveToken();
-    if (!token) return askForToken();
+    const token = await resolveToken();
+    if (!token) return askForToken(CFG.ionAccessToken ? "The saved Cesium ion token was rejected. Paste a current one to continue." : "");
     Cesium.Ion.defaultAccessToken = token;
 
     await createViewer();
