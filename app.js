@@ -316,7 +316,6 @@
   // Select a lesson, fetching its track first if needed. Only the latest click wins.
   async function openFlight(f) {
     state.pending = f;
-    state.showAll = true;
     try {
       await ensureLoaded(f);
     } catch (e) {
@@ -678,7 +677,9 @@
 
   // All tracks are downloaded at startup, but only the latest is drawn until the
   // user asks to visualize all flight paths or picks a lesson.
-  const isVisible = (f) => f.loaded && (state.showAll || f === state.defaultFlight || f === state.selected);
+  // A selected lesson is shown on its own; other paths appear only in the journey overview.
+  const isVisible = (f) =>
+    f.loaded && (state.selected ? f === state.selected : state.showAll || f === state.defaultFlight);
 
   function applyStyles() {
     const sel = state.selected;
