@@ -329,6 +329,61 @@ body.flight-open #mapTools { top: 150px; }
 #credits .cesium-credit-logoContainer img { height: 18px; vertical-align: middle; }
 #credits a { color: rgba(255, 255, 255, 0.8); }
 
+/* "Data attribution" panel. Cesium builds it inside the map widget, below our panels in
+   z-order; app.js moves the overlay to <body>, and these rules restyle it to match the app.
+   Cesium centers it with an inline margin-top and toggles -mobile/-expanded classes by
+   width, so placement is overridden here. */
+.cesium-credit-lightbox-overlay {
+  position: fixed !important; inset: 0; z-index: 60 !important;
+  width: auto !important; height: auto !important;
+  background: rgba(3, 5, 12, 0.55) !important;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.cesium-credit-lightbox,
+.cesium-credit-lightbox.cesium-credit-lightbox-expanded,
+.cesium-credit-lightbox.cesium-credit-lightbox-mobile {
+  position: absolute !important; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  margin: 0 !important; width: min(460px, calc(100vw - 32px)) !important; max-width: none !important;
+  height: auto !important; min-height: 0 !important; max-height: min(72vh, calc(100dvh - 48px));
+  overflow-y: auto; overscroll-behavior: contain;
+  background: var(--bg-strong) !important; color: var(--text) !important;
+  border: 1px solid var(--border) !important; border-radius: var(--radius) !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  font: 13px/1.5 "Inter", system-ui, sans-serif;
+}
+.cesium-credit-lightbox-title {
+  padding: 18px 56px 4px 20px !important; font-size: 15px; font-weight: 700; color: var(--text);
+}
+.cesium-credit-lightbox-close {
+  position: absolute !important; top: 12px !important; right: 12px !important;
+  width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%;
+  font-size: 20px !important; line-height: 1; text-decoration: none;
+  color: var(--text) !important; background: rgba(255, 255, 255, 0.08);
+}
+.cesium-credit-lightbox-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff !important; }
+.cesium-credit-lightbox > ul { list-style: none; margin: 0; padding: 6px 20px 18px !important; font-size: 13px !important; }
+.cesium-credit-lightbox > ul > li {
+  padding: 9px 0 !important; color: var(--muted); border-top: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-wrap: anywhere;
+}
+.cesium-credit-lightbox > ul > li:first-child { border-top: 0; }
+.cesium-credit-lightbox > ul > li img { max-height: 22px; width: auto; vertical-align: middle; }
+.cesium-credit-lightbox > ul > li a { color: var(--accent) !important; text-decoration: none; }
+.cesium-credit-lightbox > ul > li a:hover { text-decoration: underline; }
+
+/* Portrait phones: the panel rises from the bottom like the logbook sheet. */
+@media (max-width: 600px) {
+  .cesium-credit-lightbox,
+  .cesium-credit-lightbox.cesium-credit-lightbox-expanded,
+  .cesium-credit-lightbox.cesium-credit-lightbox-mobile {
+    left: 0; right: 0; top: auto; bottom: 0; transform: none;
+    width: auto !important; max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 64px);
+    border-radius: 22px 22px 0 0 !important; border-bottom: 0 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
 /* ---------- Loader / modal / toast ---------- */
 #loader {
   position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
@@ -523,14 +578,9 @@ body.flight-open #mapTools { top: 150px; }
 
   #hud { left: var(--gap); right: var(--gap); top: calc(var(--safe-t) + var(--gap)); }
   #camModes { top: calc(var(--safe-t) + 64px); right: var(--gap); padding: 4px; }
-  /* Attribution: one quiet line riding just above the sheet in every state, because the map
-     is still on screen above it (Google's terms require the attribution whenever it is). */
-  #credits {
-    top: auto; left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 4px); text-align: center;
-    transition: bottom .35s cubic-bezier(.2, .8, .2, 1), opacity .25s;
-  }
-  /* The full sheet leaves only a strip of map; the camera buttons would collide with the credits there. */
-  body[data-sheet="full"] #camModes { opacity: 0; pointer-events: none; }
+  /* Attribution: one quiet line between the player and the closed sheet. Opening the sheet
+     slides it over the credits (the sheet sits above them in z-order). */
+  #credits { top: auto; left: var(--gap); right: var(--gap); bottom: calc(64px + var(--safe-b)); text-align: center; }
   #player { left: var(--gap); right: var(--gap); bottom: calc(var(--sheet-h) + 22px); }
   #toast { top: calc(var(--safe-t) + 12px); }
 

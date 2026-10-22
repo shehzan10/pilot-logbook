@@ -204,6 +204,10 @@
     scene.postProcessStages.fxaa.enabled = true;
     viewer.resolutionScale = renderScale();
     viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    // Cesium builds the "Data attribution" overlay inside the map widget, where our panels
+    // stack above it. Lift it to <body> (Cesium keeps its own reference, so it still works).
+    const creditOverlay = viewer.container.querySelector(".cesium-credit-lightbox-overlay");
+    if (creditOverlay) document.body.appendChild(creditOverlay);
 
     state.viewer = viewer;
 
@@ -1652,6 +1656,11 @@
 
     document.addEventListener("keydown", (e) => {
       if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+      const attribution = document.querySelector(".cesium-credit-lightbox-overlay");
+      if (attribution && attribution.style.display === "block") {
+        if (e.key === "Escape") attribution.querySelector(".cesium-credit-lightbox-close").click();
+        return;
+      }
       const fl = state.flights;
       const idx = state.selected ? fl.indexOf(state.selected) : -1;
       if (e.key === "/") { e.preventDefault(); setTool("search"); }
