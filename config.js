@@ -7,6 +7,16 @@ window.APP_CONFIG = {
   // "N16237 - 2026-10-14". The tail number and date are read from the name.
   // If the token has the assets:list scope, matching KML assets are also auto-discovered.
   flightAssetIds: [6049767, 6049768, 6049769, 6049770, 6065426],
+  // Altimeter setting (inHg) for each lesson, by flight asset ID: the KMQS METAR before
+  // departure. ADS-B reports pressure altitude (29.92); the HUD, chart and cards show
+  // indicated altitude, adding (setting - 29.92) x 1000 ft. Lessons without one show pressure altitude.
+  altimeters: {
+    6049767: 30.08, // 2026-09-12
+    6049768: 30.43, // 2026-10-10
+    6049769: 29.92, // 2026-10-14
+    6049770: 30.60, // 2026-10-18
+    6065426: 30.11, // 2026-10-21
+  },
   // Cessna Skyhawk 172S glTF model (ion asset) flown along the selected track.
   aircraftModelAssetId: 6064799,
   // Extra yaw (degrees) if the model's nose doesn't point along the track.

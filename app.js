@@ -474,6 +474,20 @@
     f.distance = dist;
     f.maxAlt = maxAlt;
     f.minAlt = minAlt;
+
+    // Displayed altitude (ft). ADS-B reports pressure altitude (29.92 inHg); with the lesson's
+    // altimeter setting it becomes indicated altitude: + (setting − 29.92) × 1000 ft.
+    // Only the numbers change; the 3D track keeps its own terrain calibration.
+    const setting = Number((CFG.altimeters || {})[f.id]);
+    f.altimeter = setting > 27 && setting < 32 ? setting : null;
+    const corrFt = f.altimeter ? (f.altimeter - 29.92) * 1000 : 0;
+    f.maxFt = -Infinity;
+    f.minFt = Infinity;
+    for (const p of s) {
+      p.ft = p.ground ? 0 : p.h * M_TO_FT + corrFt; // on-ground reports stay at 0, as before
+      f.maxFt = Math.max(f.maxFt, p.ft);
+      f.minFt = Math.min(f.minFt, p.ft);
+    }
     f.maxSpd = maxSpd;
     f.maxFromStart = maxFromStart;
     f.type =
@@ -892,7 +906,15 @@
     });
     if (card) revealActiveCard(true);
 
-    $("#playerTitle").textContent = `Lesson ${f.lesson}${f.tail ? " · " + f.tail : ""} · ${f.dateLabel}${f.route ? " · " + f.route : ""}`;
+    // Say which altitude the numbers are: indicated at the lesson's setting, or raw pressure altitude.
+    const set = f.altimeter ? f.altimeter.toFixed(2) : null;
+    $("#hudAltLabel").textContent = set ? `Alt · ${set}` : "Pressure alt";
+    $("#hudAltItem").title = set
+      ? `Indicated altitude at altimeter setting ${set} inHg (ADS-B pressure altitude corrected from 29.92)`
+      : "ADS-B pressure altitude (29.92 inHg); can differ from the altimeter by a few hundred feet";
+    $("#chartAltLegend").textContent = set ? `Altitude (${set})` : "Pressure altitude";
+
+    $("#playerTitle").textContent =`Lesson ${f.lesson}${f.tail ? " · " + f.tail : ""} · ${f.dateLabel}${f.route ? " · " + f.route : ""}`;
     document.documentElement.style.setProperty("--accent", f.css);
     ["#player", "#hud", "#camModes"].forEach((s) => $(s).classList.remove("hidden"));
     document.body.classList.add("flight-open");
@@ -919,6 +941,7 @@
       ground: !!(a.ground && b.ground),
       turn: b.t > a.t ? Cesium.Math.toDegrees(dh) / (b.t - a.t) : 0,
       alt: a.h + (b.h - a.h) * u,
+      ft: a.ft + (b.ft - a.ft) * u,
       spd: a.spd + (b.spd - a.spd) * u,
       vs: a.vs + (b.vs - a.vs) * u,
       hdg: (a.hdg + Cesium.Math.toDegrees(dh) * u + 360) % 360,
@@ -934,7 +957,7 @@
     hudLast.f = f;
     Cesium.JulianDate.clone(time, hudLast.time);
     const c = (state.current = stateAt(f, time));
-    $("#hudAlt").textContent = c.ground ? "GND" : fmtNum(Math.round((c.alt * M_TO_FT) / 10) * 10);
+    $("#hudAlt").textContent = c.ground ? "GND" : fmtNum(Math.round(c.ft / 10) * 10);
     $("#hudAlt").nextElementSibling.style.visibility = c.ground ? "hidden" : "";
     $("#hudSpd").textContent = fmtNum(c.spd * MS_TO_KT);
     const vs = Math.round((c.vs * M_TO_FT * 60) / 10) * 10;
@@ -982,8 +1005,8 @@
     ctx.clearRect(0, 0, w, h);
     const pad = { l: 44, r: 8, t: 8, b: 16 };
     const iw = w - pad.l - pad.r, ih = h - pad.t - pad.b;
-    const lo = Math.floor((f.minAlt * M_TO_FT) / 500) * 500;
-    const hi = Math.ceil((f.maxAlt * M_TO_FT * 1.05) / 500) * 500 || lo + 500;
+    const lo = Math.floor(f.minFt / 500) * 500;
+    const hi = Math.ceil((f.maxFt * 1.05) / 500) * 500 || lo + 500;
     if (![lo, hi, f.duration].every(Number.isFinite) || f.duration <= 0 || hi <= lo) return;
     const x = (t) => pad.l + (t / f.duration) * iw;
     const y = (ft) => pad.t + ih - ((ft - lo) / (hi - lo)) * ih;
@@ -1015,13 +1038,13 @@
     grad.addColorStop(1, f.css + "05");
     ctx.beginPath();
     ctx.moveTo(x(0), pad.t + ih);
-    for (let i = 0; i < s.length; i += k) ctx.lineTo(x(s[i].t), y(s[i].h * M_TO_FT));
+    for (let i = 0; i < s.length; i += k) ctx.lineTo(x(s[i].t), y(s[i].ft));
     ctx.lineTo(x(f.duration), pad.t + ih);
     ctx.closePath();
     ctx.fillStyle = grad;
     ctx.fill();
     ctx.beginPath();
-    for (let i = 0; i < s.length; i += k) ctx[i ? "lineTo" : "moveTo"](x(s[i].t), y(s[i].h * M_TO_FT));
+    for (let i = 0; i < s.length; i += k) ctx[i ? "lineTo" : "moveTo"](x(s[i].t), y(s[i].ft));
     ctx.strokeStyle = f.css;
     ctx.lineWidth = 2;
     ctx.shadowColor = f.css;
@@ -1047,7 +1070,7 @@
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(cx, pad.t); ctx.lineTo(cx, pad.t + ih); ctx.stroke();
     ctx.beginPath();
-    ctx.arc(cx, y(c.alt * M_TO_FT), 5, 0, Math.PI * 2);
+    ctx.arc(cx, y(c.ft), 5, 0, Math.PI * 2);
     ctx.fillStyle = "#fff";
     ctx.shadowColor = f.css; ctx.shadowBlur = 12;
     ctx.fill();
@@ -1099,7 +1122,7 @@
     $("#statFlights").textContent = fl.length;
     $("#statHours").textContent = `${hours.toFixed(1)}h${more}`;
     $("#statDistance").textContent = ld.length ? fmtNum(ld.reduce((a, f) => a + f.distance, 0) * M_TO_NM) + more : "–";
-    $("#statAlt").textContent = ld.length ? fmtNum(Math.max(...ld.map((f) => f.maxAlt)) * M_TO_FT, 0) + more : "–";
+    $("#statAlt").textContent = ld.length ? fmtNum(Math.max(...ld.map((f) => f.maxFt)), 0) + more : "–";
     $("#progressText").textContent = `${hours.toFixed(1)}${more} / ${CFG.pplTargetHours} hrs`;
     $("#sheetSummary").innerHTML = `<b>Logbook</b> · ${fl.length} lesson${fl.length === 1 ? "" : "s"} · ${hours.toFixed(1)}${more} hrs logged`;
     requestAnimationFrame(() => {
@@ -1107,7 +1130,7 @@
     });
 
     const longest = ld.reduce((a, f) => (f.duration > (a ? a.duration : 0) ? f : a), null);
-    const highest = ld.reduce((a, f) => (f.maxAlt > (a ? a.maxAlt : -Infinity) ? f : a), null);
+    const highest = ld.reduce((a, f) => (f.maxFt > (a ? a.maxFt : -Infinity) ? f : a), null);
     const farthest = ld.reduce((a, f) => (f.maxFromStart > (a ? a.maxFromStart : 0) ? f : a), null);
     const multi = ld.length > 1;
 
@@ -1143,7 +1166,7 @@
           <div class="chips">
             <div class="chip"><b>${f.loaded ? fmtDuration(f.duration) : "–"}</b>Duration</div>
             <div class="chip"><b>${f.loaded ? fmtNum(f.distance * M_TO_NM, 1) : "–"}</b>nm</div>
-            <div class="chip"><b>${f.loaded ? fmtNum(f.maxAlt * M_TO_FT) : "–"}</b>ft max</div>
+            <div class="chip"><b>${f.loaded ? fmtNum(f.maxFt) : "–"}</b>ft max</div>
           </div>
           ${f.loaded ? sparkline(f) : `<div class="spark spark-placeholder"></div>`}
           ${badges.length ? `<div class="badges">${badges.map((b) => `<span class="badge">${b}</span>`).join("")}</div>` : ""}

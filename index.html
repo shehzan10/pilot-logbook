@@ -56,7 +56,7 @@
   </aside>
 
   <div id="hud" class="glass hidden">
-    <div class="hud-item" title="ADS-B pressure altitude (set to 29.92 inHg), so it can differ from the altimeter by a few hundred feet"><div class="hud-label">Pressure alt</div><div class="hud-value"><span id="hudAlt">–</span><small>ft</small></div></div>
+    <div class="hud-item" id="hudAltItem"><div class="hud-label" id="hudAltLabel">Altitude</div><div class="hud-value"><span id="hudAlt">–</span><small>ft</small></div></div>
     <div class="hud-item"><div class="hud-label">Ground speed</div><div class="hud-value"><span id="hudSpd">–</span><small>kt</small></div></div>
     <div class="hud-item"><div class="hud-label">Vertical</div><div class="hud-value"><span id="hudVs">–</span><small>fpm</small></div></div>
     <div class="hud-item"><div class="hud-label">Heading</div><div class="hud-value"><span id="hudHdg">–</span><small>°</small></div></div>
@@ -144,7 +144,7 @@
     <div id="scrub" class="scrub mobile-only"><div id="scrubFill"></div></div>
     <div class="chart-wrap">
       <canvas id="chart"></canvas>
-      <div class="chart-legend"><span class="lg-alt">Pressure altitude</span><span class="lg-spd">Ground speed</span></div>
+      <div class="chart-legend"><span class="lg-alt" id="chartAltLegend">Altitude</span><span class="lg-spd">Ground speed</span></div>
     </div>
   </footer>
 
