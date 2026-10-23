@@ -964,6 +964,10 @@
     const vs = Math.round((c.vs * M_TO_FT * 60) / 10) * 10;
     $("#hudVs").textContent = (vs > 0 ? "+" : "") + fmtNum(vs);
     $("#hudHdg").textContent = String(Math.round(c.hdg) % 360).padStart(3, "0");
+    // Heading dial: the card turns opposite the heading; on the rose, the airplane turns with it.
+    const hdgDeg = c.hdg.toFixed(1);
+    $("#hdgCard").setAttribute("transform", `rotate(${-hdgDeg})`);
+    $("#hdgPlane").setAttribute("transform", `rotate(${hdgDeg})`);
     $("#clockTime").textContent = Cesium.JulianDate.toDate(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     $("#elapsed").textContent = `${fmtDuration(c.t, true)} / ${fmtDuration(f.duration, true)}`;
     $("#scrubFill").style.width = `${(100 * Cesium.Math.clamp(c.t / f.duration, 0, 1)).toFixed(2)}%`;
@@ -1559,6 +1563,32 @@
         state.viewer.clock.multiplier = Number(next.dataset.speed);
       })
     );
+
+    // Heading dial: tap to switch between the heading-indicator card and the north-up rose.
+    const dial = $("#hdgDial");
+    const dialTitle = {
+      card: "Heading indicator: the card turns, the airplane stays nose-up. Click for a north-up compass.",
+      rose: "North-up compass: the airplane points along the heading. Click for the heading indicator.",
+    };
+    const setDial = (style) => {
+      dial.dataset.style = style;
+      dial.title = dialTitle[style];
+    };
+    try {
+      if (localStorage.getItem("hudHeadingStyle") === "rose") setDial("rose");
+      else setDial("card");
+    } catch (e) {
+      setDial("card");
+    }
+    dial.addEventListener("click", () => {
+      const next = dial.dataset.style === "card" ? "rose" : "card";
+      setDial(next);
+      try {
+        localStorage.setItem("hudHeadingStyle", next);
+      } catch (e) {
+        // Preference just won't persist.
+      }
+    });
 
     $("#chartBtn").addEventListener("click", () => {
       $("#chartBtn").classList.toggle("active", document.body.classList.toggle("chart-open"));
