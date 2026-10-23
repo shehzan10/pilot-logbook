@@ -196,10 +196,12 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .hud-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
 .hud-value { font-family: "JetBrains Mono", monospace; font-size: 24px; font-weight: 700; margin-top: 2px; }
 .hud-value small { font-family: "Inter"; font-size: 11px; color: var(--muted); margin-left: 4px; font-weight: 500; }
-/* Heading dial to the right of the number: heading-indicator card (default) or north-up rose. */
+/* Heading dial to the right of the label and number, as tall as both: heading-indicator
+   card (default) or north-up rose. */
+.hud-hdg { display: flex; align-items: center; gap: 10px; }
 .hdg-dial {
-  width: 30px; height: 30px; margin: -4px 0 0 8px; padding: 0; border: 0; border-radius: 50%;
-  background: none; vertical-align: middle; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  flex: none; width: 46px; height: 46px; padding: 0; border: 0; border-radius: 50%;
+  background: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 .hdg-dial svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .hdg-dial:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -509,12 +511,14 @@ body.flight-open #mapTools { top: 150px; }
   .play-btn svg { width: 19px; height: 19px; }
   #player { padding: 10px 12px 6px; }
 
-  #hud { grid-template-columns: repeat(4, 1fr); padding: 6px 4px; gap: 0; }
+  /* The heading column sizes to its dial; the other three share what's left. */
+  #hud { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; padding: 6px 4px; gap: 0; }
   .hud-item { min-width: 0; padding: 2px 8px; }
   .hud-label { font-size: 8.5px; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hud-value { font-size: 16px; }
   .hud-value small { font-size: 9px; margin-left: 2px; }
-  .hdg-dial { width: 24px; height: 24px; margin: -3px 0 0 4px; }
+  .hud-hdg { gap: 5px; }
+  .hdg-dial { width: 34px; height: 34px; }
 
   .glass, .glass button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
   .notes textarea { user-select: text; -webkit-user-select: text; font-size: 16px; }
@@ -666,4 +670,8 @@ body.flight-open #mapTools { top: 150px; }
   .sw { width: 26px; height: 26px; }
   .search-panel { width: min(380px, calc(100vw - 80px)); }
   .search-results { max-height: calc(100dvh - 120px); }
+}
+/* Very narrow phones: keep all four HUD values on one line. */
+@media (max-width: 360px) {
+  .hdg-dial { width: 28px; height: 28px; }
 }
