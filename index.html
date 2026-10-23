@@ -141,13 +141,24 @@
     </div>
 
     <button id="compassBtn" class="tool-btn glass compass" title="Reset to north-up (N)" aria-label="Reset map to north-up">
-      <svg viewBox="0 0 44 44">
-        <g id="compassRose">
-          <circle cx="22" cy="22" r="17" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1.5" />
-          <path d="M22 5v3M22 36v3M5 22h3M36 22h3" stroke="rgba(255,255,255,.45)" stroke-width="1.5" />
-          <text x="22" y="15.5" text-anchor="middle" font-size="7.5" font-weight="800" fill="#ff5a5f" font-family="Inter, sans-serif">N</text>
-          <path d="M22 16.5 25 22h-6z" fill="#ff5a5f" />
-          <path d="M22 29 19 22h6z" fill="rgba(255,255,255,.8)" />
+      <svg viewBox="-20 -20 40 40">
+        <!-- Same card as the HUD heading dial; the magnetic diamond points north. Turns with the map. -->
+        <circle r="15" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.25)" stroke-width="1.5" />
+        <g id="compassRose" stroke="rgba(255,255,255,.3)" stroke-width="1">
+          <line y1="-15" y2="-12.5" transform="rotate(30)" />
+          <line y1="-15" y2="-12.5" transform="rotate(60)" />
+          <line y1="-15" y2="-10.5" stroke="rgba(255,255,255,.65)" stroke-width="1.4" transform="rotate(90)" />
+          <line y1="-15" y2="-12.5" transform="rotate(120)" />
+          <line y1="-15" y2="-12.5" transform="rotate(150)" />
+          <line y1="-15" y2="-10.5" stroke="rgba(255,255,255,.65)" stroke-width="1.4" transform="rotate(180)" />
+          <line y1="-15" y2="-12.5" transform="rotate(210)" />
+          <line y1="-15" y2="-12.5" transform="rotate(240)" />
+          <line y1="-15" y2="-10.5" stroke="rgba(255,255,255,.65)" stroke-width="1.4" transform="rotate(270)" />
+          <line y1="-15" y2="-12.5" transform="rotate(300)" />
+          <line y1="-15" y2="-12.5" transform="rotate(330)" />
+          <text y="-8.6" stroke="none" fill="#ff5a5f" font-size="7" font-weight="800" font-family="Inter, sans-serif" text-anchor="middle">N</text>
+          <path stroke="none" d="M0-6.6L2.6 0h-5.2z" fill="#ff5a5f" />
+          <path stroke="none" d="M0 6.6L-2.6 0h5.2z" fill="rgba(255,255,255,.85)" />
         </g>
       </svg>
     </button>

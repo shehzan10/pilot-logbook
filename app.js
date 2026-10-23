@@ -1303,7 +1303,7 @@
     const deg = Math.round(Cesium.Math.toDegrees(Cesium.Math.negativePiToPi(state.viewer.camera.heading)) * 10) / 10;
     if (deg === compass.lastDeg) return;
     compass.lastDeg = deg;
-    $("#compassRose").setAttribute("transform", `rotate(${-deg} 22 22)`);
+    $("#compassRose").setAttribute("transform", `rotate(${-deg})`);
     $("#compassBtn").classList.toggle("north", Math.abs(deg) < 0.5);
   }
 
