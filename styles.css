@@ -673,5 +673,8 @@ body.flight-open #mapTools { top: 150px; }
 }
 /* Very narrow phones: keep all four HUD values on one line. */
 @media (max-width: 360px) {
+  .hud-item { padding: 2px 5px; }
+  .hud-value { font-size: 14px; }
+  .hud-value small { font-size: 8px; margin-left: 1px; }
   .hdg-dial { width: 28px; height: 28px; }
 }
