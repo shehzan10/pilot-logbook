@@ -511,8 +511,9 @@ body.flight-open #mapTools { top: 150px; }
   .play-btn svg { width: 19px; height: 19px; }
   #player { padding: 10px 12px 6px; }
 
-  /* The heading column sizes to its dial; the other three share what's left. */
-  #hud { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; padding: 6px 4px; gap: 0; }
+  /* The heading column sizes to its dial; the rest is shared by what each value needs:
+     ground speed (3 digits) gives room to vertical speed (e.g. -1,000 fpm). */
+  #hud { grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1.2fr) auto; padding: 6px 4px; gap: 0; }
   .hud-item { min-width: 0; padding: 2px 8px; }
   .hud-label { font-size: 8.5px; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hud-value { font-size: 16px; }
